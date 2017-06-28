@@ -46,7 +46,7 @@ int main(int argc, const char **argv)
             }
     };
     char buffer[] = "{request {frontend ipc://var/lib/knowdy/coll_font}"
-                    "{backend ipc://var/lib/knowdy/coll_back}}";
+                             "{backend ipc://var/lib/knowdy/coll_back}}";
 
     int return_val = EXIT_FAILURE;
     int error_code;
@@ -54,7 +54,8 @@ int main(int argc, const char **argv)
     error_code = kndGslParser_new(&parser, specs, sizeof(specs) / sizeof(struct kndGslSpec));
     if (error_code != 0) goto exit;
 
-    error_code = parser->parse(parser, buffer, sizeof(buffer));
+    size_t buffer_size = sizeof(buffer);
+    error_code = parser->parse(parser, buffer, &buffer_size);
     if (error_code != 0) goto exit;
 
     return_val = EXIT_SUCCESS;

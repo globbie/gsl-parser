@@ -2,54 +2,118 @@
 #include <string.h>
 
 #include <gsl-parser.h>
+#include <stdio.h>
+
+#if 1
+#define DBG_LOG(...) do { printf(__VA_ARGS__); } while (false)
+#else
+#define DBG_LOG(...) do { } while (false)
+#endif
+
+enum parser_state
+{
+    ps_none,
+    ps_block_started,
+    ps_field_started,
+    ps_field_ended
+};
 
 static int
-parse(struct kndGslParser *self, const char *buffer, size_t buffer_size)
+spec_find(struct kndGslSpec *specs, size_t specs_num,
+          const char *name, size_t name_size,
+          struct kndGslSpec **result)
 {
-    const char *curr;
-    const char *begin;
-    const char *end;
+    return -1;
+}
 
+static int
+parse(struct kndGslParser *self, const char *buffer, size_t *buffer_size)
+{
+    const char *curr = buffer;
+    const char *field_begin = NULL;
+    size_t field_size = 0;
+    const char *field_end = NULL;
+    size_t tail_size = *buffer_size;
 
-    bool in_field = false;
-    bool in_terminal = false;
+    int error_code;
 
-    curr = buffer;
-    begin = buffer;
-    end = buffer;
+    enum parser_state state = ps_none;
 
-    while (*curr) { // todo: buffer could be not null-terminated string
+    while (curr < buffer + *buffer_size) {
+
         switch (*curr) {
+        case '{':
+            DBG_LOG("OPEN BRACKET\n");
+
+            if (state == ps_none) {
+                state = ps_block_started;
+            }
+
+            if (state == ps_field_ended) {
+                DBG_LOG("\tentering sub block\n");
+                // recursive parse
+                size_t chunk_size = tail_size;
+                error_code = parse(self, curr, &chunk_size);
+                curr += chunk_size;
+                break;
+            }
+
+            break;
+        case '}':
+            DBG_LOG("CLOSE BRACKET\n");
+            if (state == ps_field_ended) {
+                state = ps_none;
+            }
+            break;
         case '\n':
         case '\r':
         case '\t':
         case ' ':
-            if (!in_field) break;
-            if (in_terminal) break;
 
-            for (size_t i = 0; i < self->specs_num; ++i) {
-                const struct kndGslSpec *spec = &self->specs[i];
-
-                if (strncmp(begin, spec->name, spec->name_size))
+            if (state == ps_block_started) {
+                break;
             }
 
-            break;
-        case '{':
-            if (!in_field) {
-                in_field = true;
-                begin = curr + 1;
-                end = begin;
+            if (state == ps_field_started) {
+                DBG_LOG("== field ended '%.*s'\n", (int) field_size, field_begin);
+                state = ps_field_ended;
+                break;
             }
-            break;
-        case '}':
+
+            if (state == ps_field_ended) {
+                break;
+            }
+
             break;
         default:
-            end = curr + 1;
+
+            if (state == ps_block_started) {
+                DBG_LOG("== field started\n");
+
+                state = ps_field_started;
+                field_begin = curr;
+                field_size = 1;
+
+                break;
+            }
+
+            if (state == ps_field_started) {
+                ++field_size;
+            }
+
+            if (state == ps_field_ended) {
+
+            }
+
+
             break;
         }
+
+        ++curr;
+        --tail_size;
     }
 
-    return -1;
+    return 0;
 }
 
 int
