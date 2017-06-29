@@ -15,7 +15,7 @@ enum parser_state
     ps_none,
     ps_block_started,
     ps_field_started,
-    ps_field_ended
+    ps_field_ended,
 };
 
 /*
@@ -35,8 +35,16 @@ parse(struct kndGslParser *self __attribute__((unused)), struct kndGslSpec *root
     const char *curr = buffer;
     const char *field_begin = NULL;
     size_t field_size = 0;
-    //const char *field_end = NULL;
     size_t tail_size = *buffer_size;
+
+    struct kndGslSpec *curr_spec;
+    size_t spec_index = 0;
+
+    if (root_spec->specs_num == 0) {
+        curr_spec = NULL;
+    } else {
+        curr_spec = &root_spec->specs[0];
+    }
 
     int error_code;
 
@@ -46,18 +54,29 @@ parse(struct kndGslParser *self __attribute__((unused)), struct kndGslSpec *root
 
         switch (*curr) {
         case '{':
-            DBG_LOG("OPEN BRACKET\n");
+            DBG_LOG("OPEN BRACKET in spec '%s'\n", root_spec->name);
 
             if (state == ps_none) {
                 state = ps_block_started;
             }
 
             if (state == ps_field_ended) {
-                DBG_LOG("\tentering sub block\n");
+                DBG_LOG("----> entering sub block '%.*s'\n", (int) field_size, field_begin);
                 // recursive parse
                 size_t chunk_size = tail_size;
-                error_code = parse(self, root_spec, curr, &chunk_size);
+                error_code = parse(self, curr_spec, curr, &chunk_size);
                 curr += chunk_size;
+                DBG_LOG("----< leaving sub block. head '%c' (0x%x)\n", *curr, *curr);
+
+                /*
+                if (spec_index < root_spec->specs_num) {
+                    ++spec_index;
+                    curr_spec = &root_spec->specs[spec_index];
+                } else {
+                    curr_spec = NULL;
+                }
+                */
+                state = ps_field_ended;
                 break;
             }
 
@@ -66,7 +85,10 @@ parse(struct kndGslParser *self __attribute__((unused)), struct kndGslSpec *root
             DBG_LOG("CLOSE BRACKET\n");
             if (state == ps_field_ended) {
                 state = ps_none;
+                *buffer_size = *buffer_size - tail_size;
+                return 0;
             }
+
             break;
         case '\n':
         case '\r':
@@ -78,7 +100,15 @@ parse(struct kndGslParser *self __attribute__((unused)), struct kndGslSpec *root
             }
 
             if (state == ps_field_started) {
-                DBG_LOG("== field ended '%.*s'\n", (int) field_size, field_begin);
+                DBG_LOG("== field ended '%.*s'. \n", (int) field_size, field_begin);
+
+                if (!curr_spec) {
+                    DBG_LOG("\tno spec was expected\n");
+                    return -1;
+                }
+
+                DBG_LOG("\tspec '%.*s' was expected\n", (int) curr_spec->name_size, curr_spec->name);
+
                 state = ps_field_ended;
                 break;
             }
@@ -86,6 +116,7 @@ parse(struct kndGslParser *self __attribute__((unused)), struct kndGslSpec *root
             if (state == ps_field_ended) {
                 break;
             }
+
 
             break;
         default:
