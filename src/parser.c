@@ -18,6 +18,7 @@ enum parser_state
     ps_field_ended
 };
 
+/*
 static int
 spec_find(struct kndGslSpec *specs, size_t specs_num,
           const char *name, size_t name_size,
@@ -25,14 +26,16 @@ spec_find(struct kndGslSpec *specs, size_t specs_num,
 {
     return -1;
 }
+*/
 
 static int
-parse(struct kndGslParser *self, const char *buffer, size_t *buffer_size)
+parse(struct kndGslParser *self __attribute__((unused)), struct kndGslSpec *root_spec __attribute__((unused)),
+      const char *buffer, size_t *buffer_size)
 {
     const char *curr = buffer;
     const char *field_begin = NULL;
     size_t field_size = 0;
-    const char *field_end = NULL;
+    //const char *field_end = NULL;
     size_t tail_size = *buffer_size;
 
     int error_code;
@@ -53,7 +56,7 @@ parse(struct kndGslParser *self, const char *buffer, size_t *buffer_size)
                 DBG_LOG("\tentering sub block\n");
                 // recursive parse
                 size_t chunk_size = tail_size;
-                error_code = parse(self, curr, &chunk_size);
+                error_code = parse(self, root_spec, curr, &chunk_size);
                 curr += chunk_size;
                 break;
             }
@@ -117,14 +120,12 @@ parse(struct kndGslParser *self, const char *buffer, size_t *buffer_size)
 }
 
 int
-kndGslParser_new(struct kndGslParser **self, struct kndGslSpec *specs, size_t specs_num)
+kndGslParser_new(struct kndGslParser **self, struct kndGslSpec *root_spec)
 {
     struct kndGslParser *parser = calloc(1, sizeof(*parser));
     if (!parser) return -1;
 
-    parser->specs = specs;
-    parser->specs_num = specs_num;
-
+    parser->root_spec = root_spec;
     parser->parse = parse;
 
     *self = parser;
