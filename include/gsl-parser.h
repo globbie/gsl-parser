@@ -17,9 +17,14 @@ struct kndGslSpec
     kndParserCallBack cb;
     void *cb_arg;
 
-    struct kndGslSpec *specs;
+    struct kndGslSpec **specs;
     size_t specs_num;
+
+    int (*child_add)(struct kndGslSpec *self, struct kndGslSpec *child);
 };
+
+int kndGslSpec_new(struct kndGslSpec **spec, struct kndGslSpec *parent);
+int kndGslSpec_delete(struct kndGslSpec *spec);
 
 struct kndGslParser
 {
@@ -29,5 +34,5 @@ struct kndGslParser
 };
 
 int kndGslParser_new(struct kndGslParser **parser, struct kndGslSpec *root_spec);
-int kndGslParser_delete(struct kndGslParser *self);
+int kndGslParser_delete(struct kndGslParser *parser);
 

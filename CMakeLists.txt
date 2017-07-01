@@ -23,7 +23,7 @@ find_package(PkgConfig)
 
 include_directories(include)
 
-set(SOURCES src/parser.c include/gsl-parser.h)
+set(SOURCES src/parser.c include/gsl-parser.h src/spec.c)
 
 add_library(${PROJECT_NAME}_obj OBJECT ${SOURCES})
 add_library(${PROJECT_NAME}_static STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_obj>)
