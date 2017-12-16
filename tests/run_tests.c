@@ -1111,6 +1111,10 @@ START_TEST(parse_change_implied_field_with_name)
     ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
     user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
 
+    // TODO(ki.stfu): check that braces are consistent
+    rc = gsl_parse_task(rec = "{user (name John Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc, gsl_FORMAT);
+
     // TODO(ki.stfu): check that () fails if change spec
     rc = gsl_parse_task(rec = "{user {name John Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc, gsl_NO_MATCH);

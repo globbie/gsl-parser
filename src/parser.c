@@ -410,6 +410,25 @@ gsl_args_push_back(const char *name,
 }
 
 static int
+gsl_check_matching_closing_brace(const char *c, bool in_change)
+{
+    switch (*(c - 1)) {
+    case '}':
+        if (!in_change) return gsl_OK;
+        break;
+    case ')':
+        if (in_change) return gsl_OK;
+        break;
+    default:
+        assert("no closing brace found");
+    }
+
+    glb_p_log("-- no matching brace found: \"%.*s\"",
+              16, c);
+    return gsl_FORMAT;
+}
+
+static int
 gsl_check_implied_field(const char *val,
                         size_t val_size,
                         struct gslTaskSpec *specs,
@@ -732,6 +751,9 @@ int gsl_parse_task(const char *rec,
                 break;
             }
 
+            err = gsl_check_matching_closing_brace(c + chunk_size + 1, in_change);
+            if (err) return err;
+
             in_field = false;
             in_change = false;
             // in_tag == false
@@ -782,6 +804,9 @@ int gsl_parse_task(const char *rec,
                 return gsl_FORMAT;
             }
 
+            err = gsl_check_matching_closing_brace(c + chunk_size + 1, in_change);
+            if (err) return err;
+
             in_field = false;
             in_change = false;
             // in_tag == false
@@ -809,6 +834,9 @@ int gsl_parse_task(const char *rec,
             }
 
             assert(in_tag == in_terminal);
+
+            err = gsl_check_matching_closing_brace(c + 1, in_change);
+            if (err) return err;
 
             if (in_terminal) {
                 err = gsl_check_field_terminal_value(b, e - b, spec, args, &num_args);
