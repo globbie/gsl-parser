@@ -20,10 +20,6 @@
 #define DEBUG_PARSER_LEVEL_4 0
 #define DEBUG_PARSER_LEVEL_TMP 1
 
-static int gsl_parse_state_change(const char *rec,
-                                  size_t *total_size,
-                                  struct gslTaskSpec *specs,
-                                  size_t num_specs);
 static int gsl_parse_list(const char *rec,
                           size_t *total_size,
                           struct gslTaskSpec *specs,
@@ -665,8 +661,9 @@ int gsl_parse_task(const char *rec,
     struct gslTaskArg args[GSL_MAX_ARGS];
     size_t num_args = 0;
 
-    bool in_field = false;
     bool in_implied_field = false;
+    bool in_field = false;
+    bool in_change = false;
     bool in_tag = false;
     bool in_terminal = false;
 
@@ -718,7 +715,7 @@ int gsl_parse_task(const char *rec,
 
             // Parse a tag after a first space.  Means in_tag can be set to true.
 
-            err = gsl_check_field_tag(b, e - b, GSL_GET_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
             if (err) return err;
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);
@@ -727,6 +724,7 @@ int gsl_parse_task(const char *rec,
             if (in_terminal) {
                 // Parse an atomic value.  Remember that we are in in_tag state.
                 // in_field == true
+                // in_change == true | false
                 in_tag = true;
                 // in_terminal == true
                 b = c + 1;
@@ -735,6 +733,7 @@ int gsl_parse_task(const char *rec,
             }
 
             in_field = false;
+            in_change = false;
             // in_tag == false
             // in_terminal == false
             c += chunk_size;
@@ -742,7 +741,8 @@ int gsl_parse_task(const char *rec,
             e = b;
             break;
         case '{':
-            /* starting brace '{' */
+        case '(':
+            /* starting brace '{' or '(' */
             if (!in_field) {
                 if (in_implied_field) {
                     err = gsl_check_implied_field(b, e - b, specs, num_specs, args, &num_args);
@@ -752,6 +752,7 @@ int gsl_parse_task(const char *rec,
                 }
 
                 in_field = true;
+                in_change = (*c == '(');
                 // in_tag == false
                 // in_terminal == false
                 b = c + 1;
@@ -762,26 +763,27 @@ int gsl_parse_task(const char *rec,
             assert(in_tag == in_terminal);
 
             if (in_terminal) {  // or in_tag
-                glb_p_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '{': %.*s",
-                        spec->name_size, spec->name, c - b + 16, b);
+                glb_p_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '%c': %.*s",
+                          spec->name_size, spec->name, (!in_change ? '{' : '('), c - b + 16, b);
                 return gsl_FORMAT;
             }
 
-            // Parse a tag after an inner field brace '{'.  Means in_tag can be set to true.
+            // Parse a tag after an inner field brace '{' or '('.  Means in_tag can be set to true.
 
-            err = gsl_check_field_tag(b, e - b, GSL_GET_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
             if (err) return err;
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);
             if (err) return err;
 
             if (in_terminal) {
-                glb_p_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '{': %.*s",
-                        spec->name_size, spec->name, c - b + 16, b);
+                glb_p_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '%c': %.*s",
+                          spec->name_size, spec->name, (!in_change ? '{' : '('), c - b + 16, b);
                 return gsl_FORMAT;
             }
 
             in_field = false;
+            in_change = false;
             // in_tag == false
             // in_terminal == false
             c += chunk_size;
@@ -789,6 +791,7 @@ int gsl_parse_task(const char *rec,
             e = b;
             break;
         case '}':
+        case ')':
             /* empty field? */
             if (!in_field) {
                 if (in_implied_field) {
@@ -798,7 +801,7 @@ int gsl_parse_task(const char *rec,
                     in_implied_field = false;
                 }
 
-                err = gsl_check_default(rec, GSL_GET_STATE, specs, num_specs);
+                err = gsl_check_default(rec, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs);
                 if (err) return err;
 
                 *total_size = c - rec;
@@ -812,6 +815,7 @@ int gsl_parse_task(const char *rec,
                 if (err) return err;
 
                 in_field = false;
+                in_change = false;
                 in_tag = false;
                 in_terminal = false;
                 b = c + 1;
@@ -819,9 +823,9 @@ int gsl_parse_task(const char *rec,
                 break;
             }
 
-            // Parse a tag after a closing brace '}' in an inner field.  Means in_tag can be set to true.
+            // Parse a tag after a closing brace '}' / ')' in an inner field.  Means in_tag can be set to true.
 
-            err = gsl_check_field_tag(b, e - b, GSL_GET_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
             if (err) return err;
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(ki.stfu): allow in_terminal parsing
@@ -834,92 +838,10 @@ int gsl_parse_task(const char *rec,
             }
 
             in_field = false;
+            in_change = false;
             // in_tag == false
             // in_terminal == false
             break;
-        case '(':
-            if (DEBUG_PARSER_LEVEL_2)
-                glb_p_log(".. basic LOOP %p detected the state change area: \"%s\"\n", specs, c);
-
-            /* starting brace '(' */
-            if (!in_field) {
-                if (in_implied_field) {
-                    err = gsl_check_implied_field(b, e - b, specs, num_specs, args, &num_args);
-                    if (err) return err;
-
-                    in_implied_field = false;
-                }
-
-                err = gsl_parse_state_change(c, &chunk_size, specs, num_specs);
-                if (err) {
-                    glb_p_log("-- basic LOOP failed to parse state change area :(");
-                    return err;
-                }
-                c += chunk_size;
-
-                if (DEBUG_PARSER_LEVEL_2)
-                    glb_p_log(".. basic LOOP %p finished func parsing at: \"%s\"\n", specs, c);
-
-                // in_field = false
-                // in_tag == false
-                // in_terminal == false
-                b = c + 1;
-                e = b;
-                break;
-            }
-
-            assert(in_tag == in_terminal);
-
-            if (in_terminal) {  // or in_tag
-                glb_p_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '(': %.*s",
-                        spec->name_size, spec->name, c - b + 16, b);
-                return gsl_FORMAT;
-            }
-
-            // Parse a tag after an inner field brace '('.  Means in_tag can be set to true.
-
-            err = gsl_check_field_tag(b, e - b, GSL_CHANGE_STATE, specs, num_specs, &spec);
-            if (err) return err;
-
-            err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);
-            if (err) return err;
-
-            if (in_terminal) {
-                glb_p_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '(': %.*s",
-                        spec->name_size, spec->name, c - b + 16, b);
-                return gsl_FORMAT;
-            }
-
-            in_field = false;
-            // in_tag == false
-            // in_terminal == false
-            c += chunk_size;
-            b = c;
-            e = b;
-            break;
-        case ')':
-            if (DEBUG_PARSER_LEVEL_2)
-                glb_p_log("\n\n-- END OF BASIC LOOP [%p] STARTED at: \"%.*s\" FINISHED at: \"%.*s\"\n\n",
-                        specs, 16, rec, 16, c);
-
-            if (!in_field) {
-                if (in_implied_field) {
-                    err = gsl_check_implied_field(b, e - b, specs, num_specs, args, &num_args);
-                    if (err) return err;
-                    in_implied_field = false;
-                    *total_size = c - rec;
-                    return gsl_OK;
-                }
-
-                /* any default action to take? */
-                if (!spec) {
-                    err = gsl_check_default(rec, GSL_CHANGE_STATE, specs, num_specs);
-                    if (err) return err;
-                }
-            }
-
-            *total_size = c - rec;
-            return gsl_OK;
         case '[':
             /* starting brace */
             if (!in_field) {
@@ -998,230 +920,6 @@ int gsl_parse_task(const char *rec,
 
     *total_size = c - rec;
     return gsl_OK;
-}
-
-
-static int gsl_parse_state_change(const char *rec,
-                                  size_t *total_size,
-                                  struct gslTaskSpec *specs,
-                                  size_t num_specs)
-{
-    const char *b, *c, *e;
-    size_t name_size;
-
-    struct gslTaskSpec *spec = NULL;
-    struct gslTaskArg args[GSL_MAX_ARGS];
-    size_t num_args = 0;
-
-    bool in_change = false;
-    bool in_tag = false;
-    bool in_field = false;
-    bool in_implied_field = false;
-    bool in_terminal = false;
-
-    size_t chunk_size;
-    int err;
-
-    c = rec;
-    b = rec;
-    e = rec;
-
-    if (DEBUG_PARSER_LEVEL_2)
-        glb_p_log("\n\n == parsing the state change area: \"%.*s\" num specs: %lu [%p]",
-                16, rec, (unsigned long)num_specs, specs);
-
-    while (*c) {
-        switch (*c) {
-        case '\n':
-        case '\r':
-        case '\t':
-        case ' ':
-            if (!in_change) break;
-            if (in_tag) break;
-
-            if (DEBUG_PARSER_LEVEL_2)
-                glb_p_log("+ whitespace in FUNC loop: \"%s\"\n\n\n", c);
-
-            err = check_name_limits(b, e, &name_size);
-            if (err) return err;
-
-            if (DEBUG_PARSER_LEVEL_2)
-                glb_p_log("++ state change loop got tag: \"%.*s\" [%lu]",
-                        name_size, b, (unsigned long)name_size);
-
-            err = gsl_find_spec(b, name_size, GSL_CHANGE_STATE, specs, num_specs, &spec);
-            if (err) {
-                glb_p_log("-- no spec found to handle the \"%.*s\" change state tag in \"%.*s\" :(",
-                        name_size, b, 32, c);
-                return err;
-            }
-
-            if (DEBUG_PARSER_LEVEL_2)
-                glb_p_log("++ got SPEC: \"%.*s\" default: %d  terminal: %d",
-                        spec->name_size, spec->name, spec->is_default, spec->is_terminal);
-
-            if (spec->validate) {
-                err = spec->validate(spec->obj,
-                                     (const char*)spec->buf, *spec->buf_size,
-                                     c, &chunk_size);
-                if (err) {
-                    glb_p_log("-- ERR: %d validation of spec \"%s\" failed :(",
-                            err, spec->name);
-                    return err;
-                }
-                // sharing bracket
-                c += chunk_size - 1;
-                in_change = false;
-                in_tag = false;
-                b = c;
-                e = b;
-                break;
-            }
-
-            if (spec->parse) {
-                if (DEBUG_PARSER_LEVEL_2)
-                    glb_p_log("== func parsing required in \"%s\" FROM: \"%s\"",
-                            spec->name, c);
-
-                err = spec->parse(spec->obj, c, &chunk_size);
-                if (err) {
-                    glb_p_log("-- ERR: %d parsing of spec \"%s\" failed :(",
-                            err, spec->name);
-                    return err;
-                }
-
-                // sharing the closing square bracket
-                c += chunk_size - 1;
-
-                in_change = false;
-                in_tag = false;
-                b = c + 1;
-                e = b;
-
-                spec->is_completed = true;
-
-                if (DEBUG_PARSER_LEVEL_2)
-                    glb_p_log("== END func parsing spec \"%s\" [%p] at: \"%s\"\n\n",
-                            spec->name, specs, c);
-                break;
-            }
-
-            in_terminal = true; // OK?
-            in_tag = true;
-            b = c + 1;
-            e = b;
-            break;
-        case '(':
-            if (in_implied_field) {
-                name_size = e - b;
-                if (name_size) {
-                    err = gsl_check_implied_field(b, name_size, specs, num_specs, args, &num_args);
-                    if (err) return err;
-                }
-
-                in_implied_field = false;
-                b = c + 1;
-                e = b;
-                break;
-            }
-
-            if (!in_change) {
-                in_change = true;
-
-                b = c + 1;
-                e = b;
-                break;
-            }
-            break;
-        case ')':
-            if (DEBUG_PARSER_LEVEL_2) {
-                if (spec) {
-                    glb_p_log("== END parse state change: \"%.*s\" [%.*s]",
-                            16, c, spec->name_size, spec->name);
-                }
-            }
-
-            if (!spec) {
-                /* activate spec search */
-                err = check_name_limits(b, e, &name_size);
-                if (err) return err;
-
-                if (DEBUG_PARSER_LEVEL_2)
-                    glb_p_log("++ FUNC LOOP got tag in close bracket: \"%.*s\" [%lu]",
-                            name_size, b, (unsigned long)name_size);
-
-                err = gsl_find_spec(b, name_size, GSL_CHANGE_STATE, specs, num_specs, &spec);
-                if (err) {
-                    glb_p_log("-- no spec found to handle the \"%.*s\" change state tag, rec:  \"%.*s\" :(",
-                            name_size, b, 16, c);
-                    return err;
-                }
-
-                if (DEBUG_PARSER_LEVEL_TMP)
-                    glb_p_log("++ got SPEC: \"%s\"  default: %d  terminal: %d",
-                            spec->name, spec->is_default, spec->is_terminal);
-            }
-
-            if (DEBUG_PARSER_LEVEL_2) {
-                chunk_size = c - rec;
-                if (chunk_size > GSL_MAX_DEBUG_CONTEXT_SIZE)
-                    chunk_size = GSL_MAX_DEBUG_CONTEXT_SIZE;
-                glb_p_log("-- close bracket at FUNC loop: \"%.*s\"\nIN CHANGE: %d\nSPECS: %s\n",
-                        chunk_size, c, in_change, specs[0].name);
-            }
-
-            /* copy to buf */
-            if (in_terminal) {
-                err = check_name_limits(b, e, &name_size);
-                if (err) {
-                    glb_p_log("-- name limit reached :(");
-                    return err;
-                }
-                if (DEBUG_PARSER_LEVEL_2)
-                    glb_p_log("++ got state change terminal: \"%.*s\" [%lu]",
-                            name_size, b, (unsigned long)name_size);
-
-                err = gsl_spec_buf_copy(spec, b, name_size);
-                if (err) return err;
-                spec->is_completed = true;
-
-                *total_size = c - rec;
-                return gsl_OK;
-            }
-
-
-            if (spec->run) {
-                err = spec->run(spec->obj, args, num_args);
-                if (err) {
-                    glb_p_log("-- \"%s\" func run failed: %d :(",
-                            spec->name, err);
-                    return err;
-                }
-            }
-
-            if (DEBUG_PARSER_LEVEL_2)
-                glb_p_log("== END parse state change: \"%.*s\" [%p]",
-                        16, c, specs);
-
-            *total_size = c - rec;
-            return gsl_OK;
-        default:
-            e = c + 1;
-
-            if (!in_field) {
-                if (!in_implied_field) {
-                    b = c;
-                    in_implied_field = true;
-                }
-            }
-
-            break;
-        }
-        c++;
-    }
-
-    //*total_size = c - rec;
-    return gsl_FAIL;
 }
 
 static int gsl_parse_list(const char *rec,
