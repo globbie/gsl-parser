@@ -33,32 +33,23 @@ static int parse_user(void *obj, const char *rec, size_t *total_size) {
     return gsl_parse_task(rec, total_size, args->specs, args->num_specs);
 }
 
-static int run_set_name(void *obj, struct gslTaskArg *args, size_t num_args) {
+static int run_set_name(void *obj, const char *name, size_t name_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
-    ck_assert(args); ck_assert_uint_eq(num_args, 1);
-    if (args[0].name_size == strlen("_impl"))
-        ck_assert_str_eq(args[0].name, "_impl");
-    else if (args[0].name_size == strlen("name"))
-        ck_assert_str_eq(args[0].name, "name");
-    else
-        ck_assert(args[0].name_size == strlen("_impl") || args[0].name_size == strlen("name"));
-    ck_assert_uint_ne(args[0].val_size, 0);
-    if (args[0].val_size > sizeof self->name)
+    ck_assert_uint_ne(name_size, 0);
+    if (name_size > sizeof self->name)
         return gsl_LIMIT;
     if (self->name_size)
         return gsl_EXISTS;  // error: already specified, return gsl_EXISTS to match .buf case
-    memcpy(self->name, args[0].val, args[0].val_size);
-    self->name_size = args[0].val_size;
+    memcpy(self->name, name, name_size);
+    self->name_size = name_size;
     return gsl_OK;
 }
 
-static int run_set_default_sid(void *obj,
-                               struct gslTaskArg *args,
-                               size_t num_args) {
+static int run_set_default_sid(void *obj, const char *val, size_t val_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
-    ck_assert(!args); ck_assert_uint_eq(num_args, 0);
+    ck_assert(!val); ck_assert_uint_eq(val_size, 0);
     return gsl_FORMAT;  // error: sid is required, return gsl_FORMAT to match .buf & .run cases
 }
 
@@ -84,25 +75,21 @@ static int parse_sid(void *obj, const char *rec, size_t *total_size) {
     return gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
 }
 
-static int run_set_sid(void *obj, struct gslTaskArg *args, size_t num_args) {
+static int run_set_sid(void *obj, const char *sid, size_t sid_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
-    ck_assert(args); ck_assert_uint_eq(num_args, 1);
-    ck_assert(args[0].name_size == strlen("sid")); ck_assert_str_eq(args[0].name, "sid");
-    ck_assert_uint_ne(args[0].val_size, 0);
-    if (args[0].val_size > sizeof self->sid)
+    ck_assert_uint_ne(sid_size, 0);
+    if (sid_size > sizeof self->sid)
         return gsl_LIMIT;
-    memcpy(self->sid, args[0].val, args[0].val_size);
-    self->sid_size = args[0].val_size;
+    memcpy(self->sid, sid, sid_size);
+    self->sid_size = sid_size;
     return gsl_OK;
 }
 
-static int run_set_default_email(void *obj,
-                                 struct gslTaskArg *args,
-                                 size_t num_args) {
+static int run_set_default_email(void *obj, const char *val, size_t val_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
-    ck_assert(!args); ck_assert_uint_eq(num_args, 0);
+    ck_assert(!val); ck_assert_uint_eq(val_size, 0);
 
     self->email_type = EMAIL_NONE;
     self->email_size = 0;
@@ -172,10 +159,10 @@ static int parse_email(void *obj, const char *rec, size_t *total_size) {
     return gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
 }
 
-static int run_set_anonymous_user(void *obj, struct gslTaskArg *args, size_t num_args) {
+static int run_set_anonymous_user(void *obj, const char *val, size_t val_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
-    ck_assert(!args); ck_assert_uint_eq(num_args, 0);
+    ck_assert(!val); ck_assert_uint_eq(val_size, 0);
 
     const char *none = "(none)";
     size_t none_size = strlen("(none)");

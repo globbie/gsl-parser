@@ -10,14 +10,6 @@
 
 typedef enum { GSL_GET_STATE, GSL_CHANGE_STATE } gsl_task_spec_type;
 
-// TODO(ki.stfu): Delete this
-struct gslTaskArg {
-    char name[GSL_NAME_SIZE + 1]; // null-terminated string
-    size_t name_size;
-    char val[GSL_NAME_SIZE + 1]; // null-terminated string
-    size_t val_size;
-};
-
 struct gslTaskSpec {
     gsl_task_spec_type type;
 
@@ -46,7 +38,7 @@ struct gslTaskSpec {
     int (*parse)(void *obj, const char *rec, size_t *total_size);
     int (*validate)(void *obj, const char *name, size_t name_size,
                     const char *rec, size_t *total_size);
-    int (*run)(void *obj, struct gslTaskArg *args, size_t num_args);
+    int (*run)(void *obj, const char *val, size_t val_size);
     int (*append)(void *accu, void *item);
     int (*alloc)(void *accu, const char *name, size_t name_size, size_t count,
                  void **item);

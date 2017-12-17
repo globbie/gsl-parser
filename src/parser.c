@@ -76,47 +76,42 @@ int gsl_parse_matching_braces(const char *rec,
 
 static int
 gsl_run_set_size_t(void *obj,
-                   struct gslTaskArg *args, size_t num_args)
+                   const char *val, size_t val_size)
 {
     size_t *self = (size_t *)obj;
-    struct gslTaskArg *arg;
     char *num_end;
     unsigned long long num;
 
-    assert(args && num_args == 1);
-    arg = &args[0];
+    assert(val && val_size != 0);
 
-    assert(arg->name_size == strlen("_impl") && !memcmp(arg->name, "_impl", arg->name_size));
-    assert(arg->val && arg->val_size != 0);
-
-    if (!isdigit(arg->val[0])) {
+    if (!isdigit(val[0])) {
         glb_p_log("-- num size_t doesn't start from a digit: \"%.*s\"",
-                arg->val_size, arg->val);
+                  (int)val_size, val);
         return gsl_FORMAT;
     }
 
     errno = 0;
-    num = strtoull(arg->val, &num_end, GSL_NUM_ENCODE_BASE);  // FIXME(ki.stfu): Null-terminated string is expected
+    num = strtoull(val, &num_end, GSL_NUM_ENCODE_BASE);  // FIXME(ki.stfu): Null-terminated string is expected
     if (errno == ERANGE && num == ULLONG_MAX) {
         glb_p_log("-- num limit reached: %.*s max: %llu",
-                arg->val_size, arg->val, ULLONG_MAX);
+                  (int)val_size, val, ULLONG_MAX);
         return gsl_LIMIT;
     }
     else if (errno != 0 && num == 0) {
         glb_p_log("-- cannot convert \"%.*s\" to num: %d",
-                arg->val_size, arg->val, errno);
+                  (int)val_size, val, errno);
         return gsl_FORMAT;
     }
 
-    if (arg->val + arg->val_size != num_end) {
+    if (val + val_size != num_end) {
         glb_p_log("-- not all characters in \"%.*s\" were parsed: \"%.*s\"",
-                arg->val_size, arg->val, num_end - arg->val, arg->val);
+                  (int)val_size, val, (int)(num_end - val), val);
         return gsl_FORMAT;
     }
 
     if (ULLONG_MAX > SIZE_MAX && num > SIZE_MAX) {
         glb_p_log("-- num size_t limit reached: %llu max: %llu",
-                num, (unsigned long long)SIZE_MAX);
+                  num, (unsigned long long)SIZE_MAX);
         return gsl_LIMIT;
     }
 
@@ -301,8 +296,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
 static int
 gsl_spec_buf_copy(struct gslTaskSpec *spec,
-                  const char *val,
-                  size_t val_size)
+                  const char *val, size_t val_size)
 {
     if (DEBUG_PARSER_LEVEL_2)
         glb_p_log(".. writing val \"%.*s\" [%zu] to buf [max size: %zu]..",
@@ -371,45 +365,6 @@ gsl_find_spec(const char *name,
 }
 
 static int
-gsl_args_push_back(const char *name,
-                   size_t name_size,
-                   const char *val,
-                   size_t val_size,
-                   struct gslTaskArg *args,
-                   size_t *num_args)
-{
-    struct gslTaskArg *arg;
-
-    // TODO(ki.stfu): ?? do not use gslTaskArg(s)
-    *num_args = 0;  // clear args
-
-    if (DEBUG_PARSER_LEVEL_2)
-        glb_p_log(".. adding (\"%.*s\", \"%.*s\") to args [size: %zu]..",
-                name_size, name, val_size, val, *num_args);
-
-    if (*num_args == GSL_MAX_ARGS) {
-        glb_p_log("-- no slot for \"%.*s\" arg [num_args: %zu] :(",
-                name_size, name, *num_args);
-        return gsl_LIMIT;
-    }
-    assert(name_size <= GSL_NAME_SIZE && "arg name is longer than GSL_NAME_SIZE");
-    assert(val_size <= GSL_NAME_SIZE && "arg val is longer than GSL_NAME_SIZE");
-
-    arg = &args[*num_args];
-    memcpy(arg->name, name, name_size);
-    arg->name[name_size] = '\0';
-    arg->name_size = name_size;
-
-    memcpy(arg->val, val, val_size);
-    arg->val[val_size] = '\0';
-    arg->val_size = val_size;
-
-    (*num_args)++;
-
-    return gsl_OK;
-}
-
-static int
 gsl_check_matching_closing_brace(const char *c, bool in_change)
 {
     switch (*(c - 1)) {
@@ -429,25 +384,18 @@ gsl_check_matching_closing_brace(const char *c, bool in_change)
 }
 
 static int
-gsl_check_implied_field(const char *val,
-                        size_t val_size,
-                        struct gslTaskSpec *specs,
-                        size_t num_specs,
-                        struct gslTaskArg *args,
-                        size_t *num_args)
+gsl_check_implied_field(const char *val, size_t val_size,
+                        struct gslTaskSpec *specs, size_t num_specs)
 {
     struct gslTaskSpec *spec;
     struct gslTaskSpec *implied_spec = NULL;
-    const char *impl_arg_name = "_impl";
-    size_t impl_arg_name_size = strlen("_impl");
     int err;
 
-    assert(impl_arg_name_size <= GSL_NAME_SIZE && "\"_impl\" is longer than GSL_NAME_SIZE");
     assert(val_size && "implied val is empty");
 
     if (DEBUG_PARSER_LEVEL_2)
         glb_p_log("++ got implied val: \"%.*s\" [%zu]",
-                val_size, val, val_size);
+                  val_size, val, val_size);
     if (val_size > GSL_NAME_SIZE) return gsl_LIMIT;
 
     for (size_t i = 0; i < num_specs; i++) {
@@ -478,10 +426,7 @@ gsl_check_implied_field(const char *val,
         return gsl_OK;
     }
 
-    err = gsl_args_push_back(impl_arg_name, impl_arg_name_size, val, val_size, args, num_args);
-    if (err) return err;
-
-    err = implied_spec->run(implied_spec->obj, args, *num_args);
+    err = implied_spec->run(implied_spec->obj, val, val_size);
     if (err) {
         glb_p_log("-- implied func for \"%.*s\" failed: %d :(",
                 val_size, val, err);
@@ -581,11 +526,8 @@ gsl_parse_field_value(const char *name,
 }
 
 static int
-gsl_check_field_terminal_value(const char *val,
-                               size_t val_size,
-                               struct gslTaskSpec *spec,
-                               struct gslTaskArg *args,
-                               size_t *num_args)
+gsl_check_field_terminal_value(const char *val, size_t val_size,
+                               struct gslTaskSpec *spec)
 {
     int err;
 
@@ -613,12 +555,7 @@ gsl_check_field_terminal_value(const char *val,
         return gsl_OK;
     }
 
-    // FIXME(ki.stfu): ?? valid case
-    // FIXME(ki.stfu): ?? push to args only if spec->run != NULL
-    err = gsl_args_push_back(spec->name, spec->name_size, val, val_size, args, num_args);
-    if (err) return err;
-
-    err = spec->run(spec->obj, args, *num_args);
+    err = spec->run(spec->obj, val, val_size);
     if (err) {
         glb_p_log("-- \"%.*s\" func run failed: %d :(",
                 spec->name_size, spec->name, err);
@@ -676,9 +613,6 @@ int gsl_parse_task(const char *rec,
     size_t name_size;
 
     struct gslTaskSpec *spec;
-
-    struct gslTaskArg args[GSL_MAX_ARGS];
-    size_t num_args = 0;
 
     bool in_implied_field = false;
     bool in_field = false;
@@ -767,7 +701,7 @@ int gsl_parse_task(const char *rec,
             /* starting brace '{' or '(' */
             if (!in_field) {
                 if (in_implied_field) {
-                    err = gsl_check_implied_field(b, e - b, specs, num_specs, args, &num_args);
+                    err = gsl_check_implied_field(b, e - b, specs, num_specs);
                     if (err) return err;
 
                     in_implied_field = false;
@@ -820,7 +754,7 @@ int gsl_parse_task(const char *rec,
             /* empty field? */
             if (!in_field) {
                 if (in_implied_field) {
-                    err = gsl_check_implied_field(b, e - b, specs, num_specs, args, &num_args);
+                    err = gsl_check_implied_field(b, e - b, specs, num_specs);
                     if (err) return err;
 
                     in_implied_field = false;
@@ -839,7 +773,7 @@ int gsl_parse_task(const char *rec,
             if (err) return err;
 
             if (in_terminal) {
-                err = gsl_check_field_terminal_value(b, e - b, spec, args, &num_args);
+                err = gsl_check_field_terminal_value(b, e - b, spec);
                 if (err) return err;
 
                 in_field = false;
@@ -876,9 +810,7 @@ int gsl_parse_task(const char *rec,
                 if (in_implied_field) {
                     name_size = e - b;
                     if (name_size) {
-                        err = gsl_check_implied_field(b, name_size,
-                                                      specs, num_specs,
-                                                      args, &num_args);
+                        err = gsl_check_implied_field(b, name_size, specs, num_specs);
                         if (err) return err;
                     }
                     in_implied_field = false;
