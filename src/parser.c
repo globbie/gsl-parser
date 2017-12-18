@@ -367,7 +367,7 @@ gsl_find_spec(const char *name,
 static int
 gsl_check_matching_closing_brace(const char *c, bool in_change)
 {
-    switch (*(c - 1)) {
+    switch (*c) {
     case '}':
         if (!in_change) return gsl_OK;
         break;
@@ -378,7 +378,7 @@ gsl_check_matching_closing_brace(const char *c, bool in_change)
         assert("no closing brace found");
     }
 
-    glb_p_log("-- no matching brace found: \"%.*s\"",
+    glb_p_log("-- no matching closing brace found: \"%.*s\"",
               16, c);
     return gsl_FORMAT;
 }
@@ -658,15 +658,23 @@ int gsl_parse_task(const char *rec,
         case '\r':
         case '\t':
         case ' ':
-            if (!in_field)
+            if (!in_field) {
+                // Example: rec = "     {name...
+                //                 ^^^^^  -- ignore spaces
                 break;
-            if (in_terminal)
+            }
+            if (in_terminal) {
+                // Example: rec = "{name John Smith...
+                //                           ^  -- keep spaces in terminal value
                 break;
+            }
 
             if (DEBUG_PARSER_LEVEL_2)
                 glb_p_log("+ whitespace in basic PARSING!");
 
             // Parse a tag after a first space.  Means in_tag can be set to true.
+            // Example: rec = "{name ...
+            //                      ^  -- handle a tag
 
             err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
             if (err) return err;
@@ -676,6 +684,8 @@ int gsl_parse_task(const char *rec,
 
             if (in_terminal) {
                 // Parse an atomic value.  Remember that we are in in_tag state.
+                // Example: rec = "{name John Smith}"
+                //                      ^  -- wait a terminal value
                 // in_field == true
                 // in_change == true | false
                 in_tag = true;
@@ -684,8 +694,16 @@ int gsl_parse_task(const char *rec,
                 e = b;
                 break;
             }
+            // else {
+            //   Example: rec = "{name John Smith}"
+            //                        ^^^^^^^^^^^  -- handled by an inner call to .parse() or .validate()
+            //                                   ^  -- c + chunk_size
+            //        or: rec = "{name {first John} {last Smith}}"
+            //                        ^^^^^^^^^^^^^^^^^^^^^^^^^^  -- same way
+            //                                                  ^  -- c + chunk_size
+            // }
 
-            err = gsl_check_matching_closing_brace(c + chunk_size + 1, in_change);
+            err = gsl_check_matching_closing_brace(c + chunk_size, in_change);
             if (err) return err;
 
             in_field = false;
@@ -698,9 +716,13 @@ int gsl_parse_task(const char *rec,
             break;
         case '{':
         case '(':
-            /* starting brace '{' or '(' */
+            // Starting brace '{' or '('
             if (!in_field) {
+                // Example: rec = "...{name John Smith}"
+                //                    ^  -- parse a new field
                 if (in_implied_field) {
+                    // Example: rec = "jsmith {name John Smith}"
+                    //                 ^^^^^^  -- but first let's handle an implied field which is pointed by |b| & |e|
                     err = gsl_check_implied_field(b, e - b, specs, num_specs);
                     if (err) return err;
 
@@ -719,12 +741,16 @@ int gsl_parse_task(const char *rec,
             assert(in_tag == in_terminal);
 
             if (in_terminal) {  // or in_tag
+                // Example: rec = "{name John {Smith}}"
+                //                            ^  -- terminal value cannot contain braces
                 glb_p_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '%c': %.*s",
                           spec->name_size, spec->name, (!in_change ? '{' : '('), c - b + 16, b);
                 return gsl_FORMAT;
             }
 
             // Parse a tag after an inner field brace '{' or '('.  Means in_tag can be set to true.
+            // Example: rec = "{name{...
+            //                      ^  -- handle a tag
 
             err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
             if (err) return err;
@@ -733,12 +759,19 @@ int gsl_parse_task(const char *rec,
             if (err) return err;
 
             if (in_terminal) {
+                // Example: rec = "{name{John Smith}}"
+                //                      ^  -- terminal value cannot start with an opening brace
                 glb_p_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '%c': %.*s",
                           spec->name_size, spec->name, (!in_change ? '{' : '('), c - b + 16, b);
                 return gsl_FORMAT;
             }
+            // else {
+            //   Example: rec = "{name{first John} {last Smith}}"
+            //                        ^^^^^^^^^^^^^^^^^^^^^^^^^  -- handled by an inner call to .parse() or .validate()
+            //                                                 ^  -- c + chunk_size
+            // }
 
-            err = gsl_check_matching_closing_brace(c + chunk_size + 1, in_change);
+            err = gsl_check_matching_closing_brace(c + chunk_size, in_change);
             if (err) return err;
 
             in_field = false;
@@ -751,9 +784,13 @@ int gsl_parse_task(const char *rec,
             break;
         case '}':
         case ')':
-            /* empty field? */
+            // Closing brace '}' or ')'
             if (!in_field) {
+                // Example: rec = "... }"
+                //                     ^  -- end of parsing
                 if (in_implied_field) {
+                    // Example: rec = "... jsmith }"
+                    //                     ^^^^^^  -- but first let's handle an implied field which is pointed by |b| & |e|
                     err = gsl_check_implied_field(b, e - b, specs, num_specs);
                     if (err) return err;
 
@@ -769,10 +806,18 @@ int gsl_parse_task(const char *rec,
 
             assert(in_tag == in_terminal);
 
-            err = gsl_check_matching_closing_brace(c + 1, in_change);
+            // Closing brace in a field
+            // Example: rec = "{name John Smith}"
+            //                                 ^  -- after a terminal value
+            //      or: rec = "{name}"
+            //                      ^  -- after a tag (i.e. field with an empty value)
+
+            err = gsl_check_matching_closing_brace(c, in_change);
             if (err) return err;
 
             if (in_terminal) {
+                // Example: rec = "{name John Smith}"
+                //                       ^^^^^^^^^^  -- handle a terminal value
                 err = gsl_check_field_terminal_value(b, e - b, spec);
                 if (err) return err;
 
@@ -785,7 +830,9 @@ int gsl_parse_task(const char *rec,
                 break;
             }
 
-            // Parse a tag after a closing brace '}' / ')' in an inner field.  Means in_tag can be set to true.
+            // Parse a tag after a closing brace '}' / ')' in a field.  Means in_tag can be set to false.
+            // Example: rec = "{name}"
+            //                      ^  -- handle a tag
 
             err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
             if (err) return err;
@@ -794,6 +841,8 @@ int gsl_parse_task(const char *rec,
             if (err) return err;
 
             if (in_terminal) {
+                // Example: rec = "{name}"
+                //                      ^  -- terminal value is empty
                 glb_p_log("-- empty terminal val for ATOMIC SPEC \"%.*s\": %.*s",
                         spec->name_size, spec->name, c - b + 16, b);
                 return gsl_FORMAT;
