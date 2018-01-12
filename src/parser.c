@@ -302,8 +302,10 @@ gsl_spec_buf_copy(struct gslTaskSpec *spec,
         glb_p_log(".. writing val \"%.*s\" [%zu] to buf [max size: %zu]..",
                 val_size, val, val_size, spec->max_buf_size);
 
-    assert(val_size && "val is empty");
-
+    if (!val_size) {
+        glb_p_log("-- empty value :(");
+        return gsl_FORMAT;
+    }
     if (val_size > spec->max_buf_size) {
         glb_p_log("-- %.*s: buf limit reached: %zu max: %zu",
                 spec->name_size, spec->name, val_size, spec->max_buf_size);
@@ -531,10 +533,6 @@ gsl_check_field_terminal_value(const char *val, size_t val_size,
 {
     int err;
 
-    if (!val_size) {
-        glb_p_log("-- empty value :(");
-        return gsl_FORMAT;
-    }
     if (val_size > GSL_NAME_SIZE) {
         glb_p_log("-- value too large: %zu bytes: \"%.*s\"",
                 val_size, val_size, val);
@@ -843,9 +841,13 @@ int gsl_parse_task(const char *rec,
             if (in_terminal) {
                 // Example: rec = "{name}"
                 //                      ^  -- terminal value is empty
-                glb_p_log("-- empty terminal val for ATOMIC SPEC \"%.*s\": %.*s",
-                        spec->name_size, spec->name, c - b + 16, b);
-                return gsl_FORMAT;
+                err = gsl_check_field_terminal_value(c, 0, spec);
+                if (err) return err;
+
+                // in_field == true
+                // in_change == true | false
+                // in_tag == false
+                in_terminal = false;
             }
 
             in_field = false;

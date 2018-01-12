@@ -36,7 +36,7 @@ static int parse_user(void *obj, const char *rec, size_t *total_size) {
 static int run_set_name(void *obj, const char *name, size_t name_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
-    ck_assert_uint_ne(name_size, 0);
+    ck_assert(name); ck_assert_uint_ne(name_size, 0);
     if (name_size > sizeof self->name)
         return gsl_LIMIT;
     if (self->name_size)
@@ -78,7 +78,9 @@ static int parse_sid(void *obj, const char *rec, size_t *total_size) {
 static int run_set_sid(void *obj, const char *sid, size_t sid_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
-    ck_assert_uint_ne(sid_size, 0);
+    ck_assert(sid);
+    if (sid_size == 0)
+        return gsl_FORMAT;  // error: sid is required, return gsl_FORMAT to match .buf & .parse cases
     if (sid_size > sizeof self->sid)
         return gsl_LIMIT;
     memcpy(self->sid, sid, sid_size);
