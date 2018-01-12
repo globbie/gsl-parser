@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 static inline void
-glb_p_log(const char *fmt, ...)
+gsl_log(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
