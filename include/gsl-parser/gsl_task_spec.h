@@ -6,7 +6,6 @@
 // TODO(ki.stfuk: Delete this
 #define GSL_NAME_SIZE 512
 #define GSL_SHORT_NAME_SIZE 64
-#define GSL_MAX_ARGS 16
 
 typedef enum { GSL_GET_STATE, GSL_CHANGE_STATE } gsl_task_spec_type;
 
