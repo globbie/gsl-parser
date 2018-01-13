@@ -86,7 +86,7 @@ gsl_run_set_size_t(void *obj,
 
     if (!isdigit(val[0])) {
         gsl_log("-- num size_t doesn't start from a digit: \"%.*s\"",
-                  (int)val_size, val);
+                (int)val_size, val);
         return gsl_FORMAT;
     }
 
@@ -94,24 +94,24 @@ gsl_run_set_size_t(void *obj,
     num = strtoull(val, &num_end, GSL_NUM_ENCODE_BASE);  // FIXME(ki.stfu): Null-terminated string is expected
     if (errno == ERANGE && num == ULLONG_MAX) {
         gsl_log("-- num limit reached: %.*s max: %llu",
-                  (int)val_size, val, ULLONG_MAX);
+                (int)val_size, val, ULLONG_MAX);
         return gsl_LIMIT;
     }
     else if (errno != 0 && num == 0) {
         gsl_log("-- cannot convert \"%.*s\" to num: %d",
-                  (int)val_size, val, errno);
+                (int)val_size, val, errno);
         return gsl_FORMAT;
     }
 
     if (val + val_size != num_end) {
         gsl_log("-- not all characters in \"%.*s\" were parsed: \"%.*s\"",
-                  (int)val_size, val, (int)(num_end - val), val);
+                (int)val_size, val, (int)(num_end - val), val);
         return gsl_FORMAT;
     }
 
     if (ULLONG_MAX > SIZE_MAX && num > SIZE_MAX) {
         gsl_log("-- num size_t limit reached: %llu max: %llu",
-                  num, (unsigned long long)SIZE_MAX);
+                num, (unsigned long long)SIZE_MAX);
         return gsl_LIMIT;
     }
 
@@ -381,7 +381,7 @@ gsl_check_matching_closing_brace(const char *c, bool in_change)
     }
 
     gsl_log("-- no matching closing brace found: \"%.*s\"",
-              16, c);
+            16, c);
     return gsl_FORMAT;
 }
 
@@ -397,7 +397,7 @@ gsl_check_implied_field(const char *val, size_t val_size,
 
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("++ got implied val: \"%.*s\" [%zu]",
-                  val_size, val, val_size);
+                val_size, val, val_size);
     if (val_size > GSL_NAME_SIZE) return gsl_LIMIT;
 
     for (size_t i = 0; i < num_specs; i++) {
@@ -742,7 +742,7 @@ int gsl_parse_task(const char *rec,
                 // Example: rec = "{name John {Smith}}"
                 //                            ^  -- terminal value cannot contain braces
                 gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '%c': %.*s",
-                          spec->name_size, spec->name, (!in_change ? '{' : '('), c - b + 16, b);
+                        spec->name_size, spec->name, (!in_change ? '{' : '('), c - b + 16, b);
                 return gsl_FORMAT;
             }
 
@@ -760,7 +760,7 @@ int gsl_parse_task(const char *rec,
                 // Example: rec = "{name{John Smith}}"
                 //                      ^  -- terminal value cannot start with an opening brace
                 gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '%c': %.*s",
-                          spec->name_size, spec->name, (!in_change ? '{' : '('), c - b + 16, b);
+                        spec->name_size, spec->name, (!in_change ? '{' : '('), c - b + 16, b);
                 return gsl_FORMAT;
             }
             // else {
