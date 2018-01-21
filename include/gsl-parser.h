@@ -1,38 +1,11 @@
 #pragma once
 
-#include <stdlib.h>
+#include "gsl-parser/config.h"
+#include "gsl-parser/gsl_task_spec.h"
 
-struct kndGslSpec;
+#include <stddef.h>
 
-typedef int (*kndParserCallBack)(void *self, const char *rec, size_t *total);
+extern int gsl_parse_size_t(void *obj, const char *rec, size_t *total_size);
 
-struct kndGslSpec
-{
-    const char *name;
-    size_t name_size;
-
-    char *buffer;
-    size_t *buffer_size;
-
-    kndParserCallBack cb;
-    void *cb_arg;
-
-    struct kndGslSpec **specs;
-    size_t specs_num;
-
-    int (*child_add)(struct kndGslSpec *self, struct kndGslSpec *child);
-};
-
-int kndGslSpec_new(struct kndGslSpec **spec, struct kndGslSpec *parent);
-int kndGslSpec_delete(struct kndGslSpec *spec);
-
-struct kndGslParser
-{
-    const struct kndGslSpec *root_spec;
-
-    int (*parse)(struct kndGslParser *self, struct kndGslSpec *root_spec, const char *buffer, size_t *buffer_size);
-};
-
-int kndGslParser_new(struct kndGslParser **parser, struct kndGslSpec *root_spec);
-int kndGslParser_delete(struct kndGslParser *parser);
-
+extern int gsl_parse_task(const char *rec, size_t *total_size,
+                          struct gslTaskSpec *specs, size_t num_specs);
