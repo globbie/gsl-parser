@@ -1,9 +1,11 @@
 #pragma once
 
+#include "gsl-parser/gsl_err.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 
-// TODO(ki.stfuk: Delete this
+// TODO(ki.stfu): Delete this
 #define GSL_NAME_SIZE 512
 #define GSL_SHORT_NAME_SIZE 64
 
@@ -34,11 +36,11 @@ struct gslTaskSpec {
     void *obj;
     void *accu;
 
-    int (*parse)(void *obj, const char *rec, size_t *total_size);
-    int (*validate)(void *obj, const char *name, size_t name_size,
-                    const char *rec, size_t *total_size);
-    int (*run)(void *obj, const char *val, size_t val_size);
-    int (*append)(void *accu, void *item);
-    int (*alloc)(void *accu, const char *name, size_t name_size, size_t count,
-                 void **item);
+    gsl_err_t (*parse)(void *obj, const char *rec, size_t *total_size);
+    gsl_err_t (*validate)(void *obj, const char *name, size_t name_size,
+                          const char *rec, size_t *total_size);
+    gsl_err_t (*run)(void *obj, const char *val, size_t val_size);
+    gsl_err_t (*append)(void *accu, void *item);
+    gsl_err_t (*alloc)(void *accu, const char *name, size_t name_size, size_t count,
+                       void **item);
 };
