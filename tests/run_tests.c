@@ -1106,6 +1106,14 @@ START_TEST(parse_value_unmatched_braces)
     ck_assert_int_eq(rc.code, gsl_NO_MATCH);
 END_TEST
 
+START_TEST(parse_value_absent_braces)
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FAIL);  // TODO(ki.stfu): add gsl_INCOMPLETE
+END_TEST
+
 START_TEST(parse_comment_empty)
     DEFINE_TaskSpecs(parse_user_args);
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
@@ -1133,11 +1141,8 @@ START_TEST(parse_comment_unmatched_braces)
     DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user {-sid 123456}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-
     rc = gsl_parse_task(rec = "{user {-sid 123456)}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);  // TODO(ki.stfu): ?? gsl_INCOMPLETE
 END_TEST
 
 // --------------------------------------------------------------------------------
@@ -1281,6 +1286,7 @@ int main() {
     tcase_add_test(tc_get, parse_value_default);
     tcase_add_test(tc_get, parse_value_default_with_selectors);
     tcase_add_test(tc_get, parse_value_unmatched_braces);
+    tcase_add_test(tc_get, parse_value_absent_braces);
     tcase_add_test(tc_get, parse_comment_empty);
     tcase_add_test(tc_get, parse_comment);
     tcase_add_test(tc_get, parse_comment_unmatched_braces);
