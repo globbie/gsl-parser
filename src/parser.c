@@ -42,37 +42,31 @@ check_name_limits(const char *b, const char *e, size_t *buf_size)
 }
 
 static gsl_err_t
-gsl_parse_matching_braces(const char *rec,
-                          size_t brace_count,
+gsl_parse_matching_braces(const char *c,
+                          bool in_change,
                           size_t *chunk_size)
 {
-    const char *b;
-    const char *c;
+    const char *b = c;
+    size_t brace_count = 1;
 
-    c = rec;
-    b = c;
+    const char open_brace = !in_change ? '{' : '(';
+    const char close_brace = !in_change ? '}' : ')';
 
-    while (*c) {
-        switch (*c) {
-        case '{':
+    for (; *c; c++) {
+        if (*c == open_brace)
             brace_count++;
-            break;
-        case '}':
-            if (!brace_count)
-                return make_gsl_err(gsl_FAIL);
+        else if (*c == close_brace) {
             brace_count--;
             if (!brace_count) {
                 *chunk_size = c - b;
                 return make_gsl_err(gsl_OK);
             }
-            break;
-        default:
-            break;
         }
-        c++;
     }
 
-    return make_gsl_err(gsl_FAIL);
+    gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
+            (!in_change ? '}' : ')'), 16, b);
+    return make_gsl_err(gsl_FORMAT);
 }
 
 static gsl_err_t
@@ -637,6 +631,7 @@ gsl_err_t gsl_parse_task(const char *rec,
     while (*c) {
         switch (*c) {
         case '-':
+            // FIXME(ki.stfu): fix these conditions
             if (!in_field) {
                 e = c + 1;
                 break;
@@ -645,8 +640,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 e = c + 1;
                 break;
             }
-            /* comment out this region */
-            err = gsl_parse_matching_braces(c, 1, &chunk_size);
+            err = gsl_parse_matching_braces(c, in_change, &chunk_size);
             if (err.code) return err;
             c += chunk_size;
             in_field = false;
