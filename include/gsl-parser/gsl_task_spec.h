@@ -22,7 +22,6 @@ struct gslTaskSpec {
     bool is_selector;
     bool is_implied;
     bool is_validator;
-    bool is_terminal;
     bool is_list;
     bool is_atomic;
 
