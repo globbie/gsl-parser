@@ -152,8 +152,6 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     assert((spec->name != NULL) == (spec->name_size != 0));
 
-    assert(spec->specs == NULL && spec->num_specs == 0);  // TODO(ki.stfu): Remove these fields
-
     assert(!spec->is_completed);
 
     if (spec->is_default)

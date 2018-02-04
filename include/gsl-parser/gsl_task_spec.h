@@ -17,9 +17,6 @@ struct gslTaskSpec {
     const char *name;
     size_t name_size;
 
-    struct gslTaskSpec *specs;
-    size_t num_specs;
-
     bool is_completed;
     bool is_default;
     bool is_selector;
