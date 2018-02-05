@@ -152,8 +152,6 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     assert((spec->name != NULL) == (spec->name_size != 0));
 
-    assert(spec->specs == NULL && spec->num_specs == 0);  // TODO(ki.stfu): Remove these fields
-
     assert(!spec->is_completed);
 
     if (spec->is_default)
@@ -164,7 +162,6 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
         assert(!spec->is_default && !spec->is_validator && !spec->is_list && !spec->is_atomic);
     if (spec->is_validator)
         assert(!spec->is_default && !spec->is_selector && !spec->is_implied && !spec->is_list && !spec->is_atomic);
-    assert(!spec->is_terminal);  // TODO(ki.stfu): ?? Remove this field
     // FIXME(ki.stfu): assert(!spec->is_list);  // TODO(ki.stfu): ?? Remove this field
     assert(!spec->is_atomic);  // TODO(ki.stfu): ?? Remove this field
 
