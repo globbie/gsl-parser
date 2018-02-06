@@ -21,11 +21,6 @@
 #define DEBUG_PARSER_LEVEL_4 0
 #define DEBUG_PARSER_LEVEL_TMP 1
 
-static gsl_err_t gsl_parse_list(const char *rec,
-                                size_t *total_size,
-                                struct gslTaskSpec *specs,
-                                size_t num_specs);
-
 static gsl_err_t
 check_name_limits(const char *b, const char *e, size_t *buf_size)
 {
@@ -848,62 +843,78 @@ gsl_err_t gsl_parse_task(const char *rec,
             // in_terminal == false
             break;
         case '[':
-            /* starting brace */
+            // Starting brace '['
             if (!in_field) {
+                // Example: rec = "...[groups jsmith...]"
+                //                    ^  -- parse a new field
                 if (in_implied_field) {
-                    name_size = e - b;
-                    if (name_size) {
-                        err = gsl_check_implied_field(b, name_size, specs, num_specs);
-                        if (err.code) return err;
-                    }
+                    // Example: rec = "jsmith [groups jsmith...]"
+                    //                 ^^^^^^  -- but first let's handle an implied field which is pointed by |b| & |e|
+                    err = gsl_check_implied_field(b, e - b, specs, num_specs);
+                    if (err.code) return err;
+
                     in_implied_field = false;
                 }
-            }
-            else {
-                err = check_name_limits(b, e, &name_size);
+
+                err = gsl_parse_task_array(c, &chunk_size, specs, num_specs);
                 if (err.code) return err;
 
-                if (DEBUG_PARSER_LEVEL_2)
-                    gsl_log("++ BASIC LOOP got tag before square bracket: \"%.*s\" [%zu]",
-                            name_size, b, name_size);
-
-                err = gsl_find_spec(b, name_size, GSL_GET_STATE, specs, num_specs, &spec);
-                if (err.code) {
-                    gsl_log("-- no spec found to handle the \"%.*s\" tag: %d",
-                            name_size, b, err.code);
-                    return err;
-                }
-
-                if (spec->validate) {
-                    err = spec->validate(spec->obj,
-                                         (const char*)spec->buf, *spec->buf_size,
-                                         c, &chunk_size);
-                    if (err.code) {
-                        gsl_log("-- ERR: %d validation of spec \"%s\" failed :(",
-                                err.code, spec->name);
-                        return err;
-                    }
-                }
+                // in_field == false
+                // in_change == false
+                // in_tag == false
+                // in_terminal == false
                 c += chunk_size;
-                spec->is_completed = true;
-                in_field = false;
                 b = c;
                 e = b;
                 break;
             }
 
-            err = gsl_parse_list(c, &chunk_size, specs, num_specs);
-            if (err.code) {
-                gsl_log("-- basic LOOP failed to parse the list area \"%.*s\" :(", 32, c);
-                return err;
+            assert(in_tag == in_terminal);
+
+            if (in_terminal) {  // or in_tag
+                // Example: rec = "{name John [Smith]}"
+                //                            ^  -- terminal value cannot contain braces
+                gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '[': %.*s",
+                        spec->name_size, spec->name, c - b + 16, b);
+                return make_gsl_err(gsl_FORMAT);
             }
-            c += chunk_size;
+
+            // Parse a tag after an inner field brace '['.  Means in_tag can be set to true.
+            // Example: rec = "{name[...
+            //                      ^  -- handle a tag
+
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
+            if (err.code) return err;
+
+            err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);
+            if (err.code) return err;
+
+            if (in_terminal) {
+                // Example: rec = "{name[John Smith]}"
+                //                      ^  -- terminal value cannot start with an opening brace
+                gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '[': %.*s",
+                        spec->name_size, spec->name, c - b + 16, b);
+                return make_gsl_err(gsl_FORMAT);
+            }
+            // else {
+            //   Example: rec = "{name[first_last John Smith]}"
+            //                        ^^^^^^^^^^^^^^^^^^^^^^^  -- handled by an inner call to .parse() or .validate()
+            //                                               ^  -- c + chunk_size
+            // }
+
+            err = gsl_check_matching_closing_brace(c + chunk_size, in_change);
+            if (err.code) return err;
+
             in_field = false;
-            in_terminal = false;
-            in_implied_field = false;
-            b = c + 1;
+            in_change = false;
+            // in_tag == false
+            // in_terminal == false
+            c += chunk_size;
+            b = c;
             e = b;
             break;
+        case ']':
+            return make_gsl_err(gsl_FORMAT);
         default:
             e = c + 1;
             if (!in_field) {
@@ -925,11 +936,10 @@ gsl_err_t gsl_parse_task(const char *rec,
     return make_gsl_err(gsl_OK);
 }
 
-static gsl_err_t
-gsl_parse_list(const char *rec,
-               size_t *total_size,
-               struct gslTaskSpec *specs,
-               size_t num_specs)
+gsl_err_t gsl_parse_task_array(const char *rec,
+                               size_t *total_size,
+                               struct gslTaskSpec *specs,
+                               size_t num_specs)
 {
     const char *b, *c, *e;
     size_t name_size;
