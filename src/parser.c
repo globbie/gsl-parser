@@ -163,7 +163,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     if (spec->is_validator)
         assert(!spec->is_default && !spec->is_selector && !spec->is_implied && !spec->is_list && !spec->is_atomic);
     // FIXME(ki.stfu): assert(!spec->is_list);  // TODO(ki.stfu): ?? Remove this field
-    assert(!spec->is_atomic);  // TODO(ki.stfu): ?? Remove this field
+    //assert(!spec->is_atomic);  // TODO(ki.stfu): ?? Remove this field
 
     assert((spec->buf != NULL) == (spec->buf_size != NULL));
     assert((spec->buf != NULL) == (spec->max_buf_size != 0));
@@ -963,17 +963,19 @@ gsl_parse_list(const char *rec,
         case '\t':
         case ' ':
             if (!in_list) break;
-            if (!in_item) break;
+
+            /*if (!in_item) {
+		break;
+		}*/
 
             if (got_tag) {
-
                 if (spec->is_atomic) {
                     /* get atomic item */
                     err = check_name_limits(b, e, &name_size);
                     if (err.code) return err;
 
-                    if (DEBUG_PARSER_LEVEL_2)
-                        gsl_log("  == got new item: \"%.*s\"",
+                    if (DEBUG_PARSER_LEVEL_TMP)
+                        gsl_log("  == got new atomic item: \"%.*s\"",
                                 name_size, b);
                     err = alloc_item(accu, b, name_size, item_count, &item);
                     if (err.code) return err;
@@ -1012,6 +1014,8 @@ gsl_parse_list(const char *rec,
                 e = b;
                 break;
             }
+
+	    
 
             err = check_name_limits(b, e, &name_size);
             if (err.code) return err;
@@ -1112,6 +1116,24 @@ gsl_parse_list(const char *rec,
             /* list requires a tag and some items */
             if (!got_tag) return make_gsl_err(gsl_FAIL);
 
+            if (got_tag) {
+                if (spec->is_atomic) {
+                    /* get atomic item */
+                    err = check_name_limits(b, e, &name_size);
+                    if (err.code) return err;
+
+                    if (DEBUG_PARSER_LEVEL_TMP)
+                        gsl_log("  == got new atomic item: \"%.*s\"",
+                                name_size, b);
+                    err = alloc_item(accu, b, name_size, item_count, &item);
+                    if (err.code) return err;
+
+                    item_count++;
+                    b = c + 1;
+                    e = b;
+                }
+            }
+	    
             *total_size = c - rec;
             return make_gsl_err(gsl_OK);
         default:
