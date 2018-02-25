@@ -5,12 +5,15 @@
 #include <assert.h>
 #include <string.h>
 
+#define USER_GROUPS_MAX_SIZE 4  // Note: Don't modify! Some tests rely this is equal to 4.
+
 // --------------------------------------------------------------------------------
 // User -- testable object
 struct User {
     char name[GSL_SHORT_NAME_SIZE]; size_t name_size;
     char sid[6]; size_t sid_size;
     char email[GSL_SHORT_NAME_SIZE]; size_t email_size; enum { EMAIL_NONE, EMAIL_HOME, EMAIL_WORK } email_type;
+    struct Group { char gid[GSL_SHORT_NAME_SIZE]; size_t gid_size; } groups[USER_GROUPS_MAX_SIZE]; size_t num_groups;
 };
 
 // --------------------------------------------------------------------------------
@@ -24,6 +27,7 @@ static void test_case_fixture_setup(void) {
     user.name_size = 0;
     user.sid_size = 0;
     user.email_size = 0; user.email_type = EMAIL_NONE;
+    user.num_groups = 0;
 }
 
 static gsl_err_t parse_user(void *obj, const char *rec, size_t *total_size) {
@@ -175,6 +179,30 @@ static gsl_err_t run_set_anonymous_user(void *obj, const char *val, size_t val_s
     return make_gsl_err(gsl_OK);
 }
 
+static gsl_err_t alloc_group(void *obj, const char *gid, size_t gid_size,
+                             size_t count, void **item) {
+    struct User *self = (struct User *)obj;
+    ck_assert(self);
+    ck_assert(gid); ck_assert_uint_ne(gid_size, 0);
+    ck_assert_uint_eq(count, self->num_groups); ck_assert(item);
+
+    if (self->num_groups == sizeof self->groups / sizeof self->groups[0])
+        return make_gsl_err(gsl_LIMIT);  // TODO(ki.stfu): ?? use gsl_NOMEM
+
+    if (gid_size > sizeof self->groups[0].gid)
+        return make_gsl_err(gsl_LIMIT);
+
+    struct Group *group = &self->groups[self->num_groups++];
+    memcpy(group->gid, gid, gid_size);
+    group->gid_size = gid_size;
+    *item = group;
+    return make_gsl_err(gsl_OK);
+}
+
+static gsl_err_t append_group(void *accu, void *item) {
+    return make_gsl_err(gsl_OK);
+}
+
 #define RESET_IS_COMPLETED(specs, num_specs)   \
     do {                                       \
         for (size_t i = 0; i < num_specs; ++i) \
@@ -258,6 +286,18 @@ static struct gslTaskSpec gen_email_spec(struct User *self, int flags) {
 
 static struct gslTaskSpec gen_default_spec(struct User *self) {
     return (struct gslTaskSpec){ .is_default = true, .run = run_set_anonymous_user, .obj = self };
+}
+
+static struct gslTaskSpec gen_groups_item_spec(struct User *self) {
+    return (struct gslTaskSpec){ .is_list_item = true,
+                                 .alloc = alloc_group, .append = append_group, .accu = self,
+                                 .parse = NULL };
+}
+
+static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec* item_spec) {
+    return (struct gslTaskSpec){ .name = "groups", .name_size = strlen("groups"),
+                                 .is_list = true,
+                                 .parse = gsl_parse_array, .obj = item_spec };
 }
 
 // --------------------------------------------------------------------------------
@@ -1155,6 +1195,40 @@ START_TEST(parse_comment_unmatched_braces)
     ck_assert_int_eq(rc.code, gsl_FORMAT);  // TODO(ki.stfu): ?? use gsl_INCOMPLETE
 END_TEST
 
+START_TEST(parse_array_atomic_empty)
+    struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user);
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user [groups]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 0);
+END_TEST
+
+START_TEST(parse_array_atomic)
+    struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user);
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user [groups jsmith]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 1); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith");
+    user.num_groups = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user [groups jsmith audio]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 2); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith"); ASSERT_STR_EQ(user.groups[1].gid, user.groups[1].gid_size, "audio");
+    user.num_groups = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user [groups jsmith audio sudo]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 3); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith"); ASSERT_STR_EQ(user.groups[1].gid, user.groups[1].gid_size, "audio"); ASSERT_STR_EQ(user.groups[2].gid, user.groups[2].gid_size, "sudo");
+END_TEST
+
 // --------------------------------------------------------------------------------
 // GSL_CHANGE_STATE cases
 
@@ -1352,6 +1426,8 @@ int main() {
     tcase_add_test(tc_get, parse_comment_empty);
     tcase_add_test(tc_get, parse_comment);
     tcase_add_test(tc_get, parse_comment_unmatched_braces);
+    tcase_add_test(tc_get, parse_array_atomic_empty);
+    tcase_add_test(tc_get, parse_array_atomic);
     suite_add_tcase(s, tc_get);
 
     TCase* tc_change = tcase_create("change cases");
