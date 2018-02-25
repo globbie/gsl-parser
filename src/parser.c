@@ -721,9 +721,13 @@ gsl_err_t gsl_parse_task(const char *rec,
             if (!in_field) {
                 // Example: rec = "...{name John Smith}"
                 //                    ^  -- parse a new field
+                //      or: rec = "...[groups jsmith...]"
+                //                    ^  -- same way
                 if (in_implied_field) {
                     // Example: rec = "jsmith {name John Smith}"
                     //                 ^^^^^^  -- but first let's handle an implied field which is pointed by |b| & |e|
+                    //      or: rec = "jsmith [groups jsmith...]"
+                    //                 ^^^^^^  -- same way
                     err = gsl_check_implied_field(b, e - b, specs, num_specs);
                     if (err.code) return err;
 
@@ -745,6 +749,8 @@ gsl_err_t gsl_parse_task(const char *rec,
             if (in_terminal) {  // or in_tag
                 // Example: rec = "{name John {Smith}}"
                 //                            ^  -- terminal value cannot contain braces
+                //      or: rec = "{name John [Smith]}"
+                //                            ^  -- same way
                 gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '%c': %.*s",
                         spec->name_size, spec->name, (!in_change ? '{' : !in_array ? '(' : '['), c - b + 16, b);
                 return make_gsl_err(gsl_FORMAT);
@@ -753,6 +759,10 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Parse a tag after an inner field brace '{' or '('.  Means in_tag can be set to true.
             // Example: rec = "{name{...
             //                      ^  -- handle a tag
+            //      or: rec = "{name[...
+            //                      ^  -- same way
+            //      or: rec = "[groups{...
+            //                        ^  -- same way
 
             err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
             if (err.code) return err;
@@ -765,6 +775,8 @@ gsl_err_t gsl_parse_task(const char *rec,
             if (in_terminal) {
                 // Example: rec = "{name{John Smith}}"
                 //                      ^  -- terminal value cannot start with an opening brace
+                // Example: rec = "{name[John Smith]}"
+                //                      ^  -- same way
                 gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '%c': %.*s",
                         spec->name_size, spec->name, (!in_change ? '{' : !in_array ? '(' : '['), c - b + 16, b);
                 return make_gsl_err(gsl_FORMAT);
@@ -773,6 +785,9 @@ gsl_err_t gsl_parse_task(const char *rec,
             //   Example: rec = "{name{first John} {last Smith}}"
             //                        ^^^^^^^^^^^^^^^^^^^^^^^^^  -- handled by an inner call to .parse() or .validate()
             //                                                 ^  -- c + chunk_size
+            //        or: rec = "{name[first_last John Smith]}"
+            //                        ^^^^^^^^^^^^^^^^^^^^^^^  -- same way
+            //                                               ^  -- c + chunk_size
             // }
 
             err = gsl_check_matching_closing_brace(c + chunk_size, in_change, in_array);
@@ -835,7 +850,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 break;
             }
 
-            // Parse a tag after a closing brace '}' / ')' in a field.  Means in_tag can be set to false.
+            // Parse a tag after a closing brace '}' / ')' in a field.  Means in_tag can be set to true.
             // Example: rec = "{name}"
             //                      ^  -- handle a tag
 
@@ -855,18 +870,58 @@ gsl_err_t gsl_parse_task(const char *rec,
 
                 // in_field == true
                 // in_change == true | false
+                // in_array == false
                 // in_tag == false
                 in_terminal = false;
             }
 
             in_field = false;
             in_change = false;
-            in_array = false;
+            // in_array == false
             // in_tag == false
             // in_terminal == false
             break;
         case ']':
-            return make_gsl_err(gsl_FORMAT);
+            // Closing brace ']'
+            if (!in_field) {
+                // Example: rec = "... ]"
+                //                     ^  -- no matching opening brace
+                return make_gsl_err(gsl_FORMAT);
+            }
+
+            assert(in_tag == in_terminal);
+
+            // Closing brace in a field
+            // Example: rec = "[groups]
+            //                        ^  -- after a tag (i.e. field with an empty value)
+
+            err = gsl_check_matching_closing_brace(c, in_change, in_array);
+            if (err.code) return err;
+
+            // terminal value is not used with lists
+            assert(!in_terminal);
+
+            // Parse a tag after a closing brace ']' in a field.  Means in_tag can be set to true.
+            // Example: rec = "[groups]"
+            //                        ^  -- handle a tag
+
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
+            if (err.code) return err;
+
+            if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
+
+            err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(ki.stfu): allow in_terminal parsing
+            if (err.code) return err;
+
+            // terminal value is not used with lists
+            assert(!in_terminal);
+
+            in_field = false;
+            // in_change == false
+            in_array = false;
+            // in_tag == false
+            // in_terminal == false
+            break;
         default:
             e = c + 1;
             if (!in_field) {
@@ -903,7 +958,7 @@ gsl_parse_array(void *obj,
     void *item;
     size_t item_count = 0;
 
-    const bool is_atomic = spec->parse != NULL;
+    const bool is_atomic = spec->parse == NULL;
     bool in_item = false;
 
     size_t chunk_size;
@@ -982,6 +1037,25 @@ gsl_parse_array(void *obj,
             e = b;
             break;
         case ']':
+            if (in_item) {
+                // Example: rec = "... jsmith]
+                //                     ^^^^^^  -- handle the last item
+
+                assert(is_atomic);  // |is_item| is used only with atomic elements
+
+                if (DEBUG_PARSER_LEVEL_2)
+                    gsl_log("  == got new item: \"%.*s\"",
+                            (int)(e - b), b);
+
+                err = spec->alloc(spec->accu, b, e - b, item_count, &item);
+                if (err.code) return err;
+
+                in_item = false;
+                item_count++;
+                // b = c + 1;
+                // e = b;
+            }
+
             *total_size = c - rec;
             return make_gsl_err(gsl_OK);
         default:
