@@ -230,8 +230,8 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     if (spec->parse) {
         // |spec->type| can be set
         assert(!spec->is_default && !spec->is_implied && !spec->is_validator);
-        assert(spec->name != NULL);
-        assert(spec->obj != NULL);
+        assert(spec->name != NULL || spec->is_list_item);
+        assert(spec->obj != NULL || spec->is_list_item);
     }
 
     // if (spec->validate)  -- already handled in spec->is_validator
@@ -885,8 +885,17 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Closing brace ']'
             if (!in_field) {
                 // Example: rec = "... ]"
-                //                     ^  -- no matching opening brace
-                return make_gsl_err(gsl_FORMAT);
+                //                     ^  -- end of parsing
+                if (in_implied_field) {
+                    // Example: rec = "... jsmith ]"
+                    //                     ^^^^^^  -- implied field is not used in lists
+                    return make_gsl_err(gsl_FORMAT);
+                }
+
+                // Example: rec = "... {gid jsmith}]"
+                //                                 ^  -- end of parsing
+                *total_size = c - rec;
+                return make_gsl_err(gsl_OK);
             }
 
             assert(in_tag == in_terminal);
@@ -1016,7 +1025,7 @@ gsl_parse_array(void *obj,
                 return err;
             }
 
-            err = spec->parse(item, c, &chunk_size);
+            err = spec->parse(item, c + 1, &chunk_size);
             if (err.code) {
                 gsl_log("-- ERR: %d parsing of spec \"%.*s\" failed :(",
                         err.code, spec->name_size, spec->name);
@@ -1032,7 +1041,7 @@ gsl_parse_array(void *obj,
 
             // in_item == false
             item_count++;
-            c += chunk_size;
+            c += chunk_size + 1;
             b = c;
             e = b;
             break;
