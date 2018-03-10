@@ -509,7 +509,7 @@ END_TEST
 
 static void
 check_parse_implied_field_max_size(int name_flags) {
-    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, name_flags));
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, name_flags), gen_sid_spec(&user, 0));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
   {
