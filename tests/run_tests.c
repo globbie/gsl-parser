@@ -385,8 +385,7 @@ START_TEST(parse_task_empty_with_closing_brace)
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = " }     ", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);  // TODO(ki.stfu): Call the default handler
-    ck_assert_uint_eq(total_size, strchr(rec, '}') - rec);  // shared brace
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
 END_TEST
 
 static void
