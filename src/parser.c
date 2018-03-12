@@ -16,7 +16,7 @@
 #include <limits.h>
 
 #define DEBUG_PARSER_LEVEL_1 0
-#define DEBUG_PARSER_LEVEL_2 1
+#define DEBUG_PARSER_LEVEL_2 0
 #define DEBUG_PARSER_LEVEL_3 0
 #define DEBUG_PARSER_LEVEL_4 0
 #define DEBUG_PARSER_LEVEL_TMP 1
@@ -1015,7 +1015,7 @@ gsl_parse_list(const char *rec,
                     err = check_name_limits(b, e, &name_size);
                     if (err.code) return err;
 
-                    if (DEBUG_PARSER_LEVEL_TMP)
+                    if (DEBUG_PARSER_LEVEL_2)
                         gsl_log("  == got new atomic item: \"%.*s\"",
                                 name_size, b);
                     err = alloc_item(accu, b, name_size, item_count, &item);
@@ -1120,7 +1120,7 @@ gsl_parse_list(const char *rec,
                     err = check_name_limits(b, e, &name_size);
                     if (err.code) return err;
 
-                    if (DEBUG_PARSER_LEVEL_TMP)
+                    if (DEBUG_PARSER_LEVEL_2)
                         gsl_log("  == got new atomic item: \"%.*s\"",
                                 name_size, b);
                     err = alloc_item(accu, b, name_size, item_count, &item);
