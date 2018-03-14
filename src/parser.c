@@ -964,52 +964,11 @@ gsl_parse_list(const char *rec,
         case ' ':
             if (!in_list) break;
 
-            if (!got_tag) {
-		err = check_name_limits(b, e, &name_size);
-		if (err.code) return err;
-
-		if (DEBUG_PARSER_LEVEL_2)
-		    gsl_log("++ list got tag: \"%.*s\" [%lu]",
-			    name_size, b, (unsigned long)name_size);
-
-		err = gsl_find_spec(b, name_size, GSL_GET_STATE, specs, num_specs, &spec);
-		if (err.code) {
-		    gsl_log("-- no spec found to handle the \"%.*s\" list tag :(",
-			    name_size, b);
-		    return err;
-		}
-
-		if (DEBUG_PARSER_LEVEL_2)
-		    gsl_log("++ got list SPEC: \"%s\"",
-			    spec->name);
-
-		if (spec->is_atomic) {
-		    if (!spec->accu) return make_gsl_err(gsl_FAIL);
-		    if (!spec->alloc) return make_gsl_err(gsl_FAIL);
-		    got_tag = true;
-		    accu = spec->accu;
-		    alloc_item = spec->alloc;
-		    b = c + 1;
-		    e = b;
-		    break;
-		}
-
-		if (!spec->append) return make_gsl_err(gsl_FAIL);
-		if (!spec->accu) return make_gsl_err(gsl_FAIL);
-		if (!spec->alloc) return make_gsl_err(gsl_FAIL);
-		if (!spec->parse) return make_gsl_err(gsl_FAIL);
-
-		append_item = spec->append;
-		accu = spec->accu;
-		alloc_item = spec->alloc;
-
-		got_tag = true;
-		b = c + 1;
-		e = b;
+            /*if (!in_item) {
 		break;
-	    }
+		}*/
 
-            if (!in_item) {
+            if (got_tag) {
                 if (spec->is_atomic) {
                     /* get atomic item */
                     err = check_name_limits(b, e, &name_size);
@@ -1026,37 +985,80 @@ gsl_parse_list(const char *rec,
                     e = b;
                     break;
                 }
-		break;
-	    }
+                /* get list item's name */
+                err = check_name_limits(b, e, &name_size);
+                if (err.code) return err;
+                if (DEBUG_PARSER_LEVEL_2)
+                    gsl_log("  == list got new item: \"%.*s\"",
+                            name_size, b);
+                err = alloc_item(accu, b, name_size, item_count, &item);
+                if (err.code) {
+                    gsl_log("-- item alloc failed: %d :(", err.code);
+                    return err;
+                }
+                item_count++;
+
+                /* parse item */
+                err = spec->parse(item, c, &chunk_size);
+                if (err.code) {
+                    gsl_log("-- list item parsing failed :(");
+                    return err;
+                }
+                c += chunk_size;
+
+                err = append_item(accu, item);
+                if (err.code) return err;
+
+                in_item = false;
+                b = c + 1;
+                e = b;
+                break;
+            }
+
 	    
-	    /* get list item's name */
-	    err = check_name_limits(b, e, &name_size);
-	    if (err.code) return err;
-	    if (DEBUG_PARSER_LEVEL_2)
-		gsl_log("  == list got new item: \"%.*s\"",
-			name_size, b);
-	    err = alloc_item(accu, b, name_size, item_count, &item);
-	    if (err.code) {
-		gsl_log("-- item alloc failed: %d :(", err.code);
-		return err;
-	    }
-	    item_count++;
 
-	    /* parse item */
-	    err = spec->parse(item, c, &chunk_size);
-	    if (err.code) {
-		gsl_log("-- list item parsing failed :(");
-		return err;
-	    }
-	    c += chunk_size;
+            err = check_name_limits(b, e, &name_size);
+            if (err.code) return err;
 
-	    err = append_item(accu, item);
-	    if (err.code) return err;
+            if (DEBUG_PARSER_LEVEL_2)
+                gsl_log("++ list got tag: \"%.*s\" [%lu]",
+                        name_size, b, (unsigned long)name_size);
 
-	    in_item = false;
-	    b = c + 1;
-	    e = b;
-	    break;
+            err = gsl_find_spec(b, name_size, GSL_GET_STATE, specs, num_specs, &spec);
+            if (err.code) {
+                gsl_log("-- no spec found to handle the \"%.*s\" list tag :(",
+                        name_size, b);
+                return err;
+            }
+
+            if (DEBUG_PARSER_LEVEL_2)
+                gsl_log("++ got list SPEC: \"%s\"",
+                        spec->name);
+
+            if (spec->is_atomic) {
+                if (!spec->accu) return make_gsl_err(gsl_FAIL);
+                if (!spec->alloc) return make_gsl_err(gsl_FAIL);
+                got_tag = true;
+                accu = spec->accu;
+                alloc_item = spec->alloc;
+                b = c + 1;
+                e = b;
+                break;
+            }
+
+            if (!spec->append) return make_gsl_err(gsl_FAIL);
+            if (!spec->accu) return make_gsl_err(gsl_FAIL);
+            if (!spec->alloc) return make_gsl_err(gsl_FAIL);
+            if (!spec->parse) return make_gsl_err(gsl_FAIL);
+
+            append_item = spec->append;
+            accu = spec->accu;
+            alloc_item = spec->alloc;
+
+            got_tag = true;
+            b = c + 1;
+            e = b;
+            break;
         case '{':
             if (!in_list) break;
             if (!got_tag) {
