@@ -485,8 +485,9 @@ gsl_parse_field_value(const char *name,
     if (spec->validate) {
         err = spec->validate(spec->obj, name, name_size, rec, total_size);
         if (err.code) {
-            gsl_log("-- ERR: %d validation spec for \"%.*s\" failed :(",
-                    err.code, name_size, name);
+	    if (DEBUG_PARSER_LEVEL_2)
+		gsl_log("-- ERR: %d validation spec for \"%.*s\" failed :(",
+			err.code, name_size, name);
             return err;
         }
 
@@ -501,8 +502,9 @@ gsl_parse_field_value(const char *name,
 
         err = spec->parse(spec->obj, rec, total_size);
         if (err.code) {
-            gsl_log("-- ERR: %d parsing of spec \"%.*s\" failed :(",
-                    err.code, spec->name_size, spec->name);
+	    if (DEBUG_PARSER_LEVEL_2)
+		gsl_log("-- ERR: %d parsing of spec \"%.*s\" failed :(",
+			err.code, spec->name_size, spec->name);
             return err;
         }
 
