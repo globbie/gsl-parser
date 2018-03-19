@@ -612,7 +612,7 @@ gsl_err_t gsl_parse_incipit(const char *rec,
 			    char *result_name,
 			    size_t *result_name_size)
 {
-    char *c, *b, *e;
+    const char *c, *b, *e;
     bool in_tag = false;
     bool in_name = false;
     bool got_name = false;
@@ -1133,12 +1133,15 @@ gsl_parse_array(void *obj,
 
                 assert(is_atomic);  // |is_item| is used only with atomic elements
 
-                if (DEBUG_PARSER_LEVEL_2)
-                    gsl_log("  == got new item: \"%.*s\"",
+                if (DEBUG_PARSER_LEVEL_TMP)
+                    gsl_log("  == got last item: \"%.*s\"",
                             (int)(e - b), b);
 
                 err = spec->alloc(spec->accu, b, e - b, item_count, &item);
                 if (err.code) return err;
+
+		err = spec->append(spec->accu, item);
+		if (err.code) return err;
 
                 in_item = false;
                 item_count++;
