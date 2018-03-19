@@ -602,6 +602,82 @@ gsl_check_default(const char *rec,
     return make_gsl_err(gsl_OK);
 }
 
+/**
+ * read out the tag and the implied field value (name)
+ */
+gsl_err_t gsl_parse_incipit(const char *rec,
+			    size_t rec_size,
+			    char *result_tag_name,
+			    size_t *result_tag_name_size,
+			    char *result_name,
+			    size_t *result_name_size)
+{
+    char *c, *b, *e;
+    bool in_tag = false;
+    bool in_name = false;
+    bool got_name = false;
+    size_t tag_size;
+    size_t name_size;
+    
+    c = rec;
+    b = rec;
+    e = rec;
+
+    for (size_t i = 0; i < rec_size; i++) {
+        c = rec + i;
+        switch (*c) {
+        case ' ':
+        case '\n':
+        case '\r':
+        case '\t':
+	    if (in_name) break;
+	    if (in_tag) {
+		tag_size = c - b;
+		if (!tag_size)
+		    return make_gsl_err(gsl_FAIL);
+		if (tag_size >= *result_tag_name_size)
+		    return make_gsl_err(gsl_FAIL);
+
+		memcpy(result_tag_name, b, tag_size);
+		*result_tag_name_size = tag_size;
+                b = c + 1;
+                e = b;
+                in_name = true;
+                break;
+            }
+
+            break;
+        case '[':
+        case '{':
+            if (!in_tag) {
+                in_tag = true;
+                b = c + 1;
+                e = b;
+                break;
+	    }
+
+            got_name = true;
+            e = c;
+            break;
+        default:
+            e = c;
+            break;
+        }
+        if (got_name) break;
+    }
+
+    name_size = e - b;
+    if (!name_size)
+	return make_gsl_err(gsl_FAIL);
+    if (name_size >= *result_name_size)
+	return make_gsl_err(gsl_FAIL);
+
+    memcpy(result_name, b, name_size);
+    *result_name_size = name_size;
+
+    return make_gsl_err(gsl_OK);
+}
+
 gsl_err_t gsl_parse_task(const char *rec,
                          size_t *total_size,
                          struct gslTaskSpec *specs,
