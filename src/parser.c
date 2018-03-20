@@ -1133,10 +1133,6 @@ gsl_parse_array(void *obj,
 
                 assert(is_atomic);  // |is_item| is used only with atomic elements
 
-                if (DEBUG_PARSER_LEVEL_TMP)
-                    gsl_log("  == got last item: \"%.*s\"",
-                            (int)(e - b), b);
-
                 err = spec->alloc(spec->accu, b, e - b, item_count, &item);
                 if (err.code) return err;
 
