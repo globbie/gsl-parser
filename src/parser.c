@@ -678,6 +678,63 @@ gsl_err_t gsl_parse_incipit(const char *rec,
     return make_gsl_err(gsl_OK);
 }
 
+gsl_err_t gsl_get_dir_size(const char *rec,
+                           size_t rec_size,
+                           const char **val,
+                           size_t *val_size,
+                           size_t *total_trailer_size)
+{
+    bool in_field = false;
+    bool got_separ = false;
+    bool got_tag = false;
+    bool got_size = false;
+    size_t chunk_size = 0;
+    const char *c, *b;
+    int i = 0;
+
+    b = rec;
+    for (i = rec_size - 1; i >= 0; i--) { 
+        c = rec + i;
+        switch (*c) {
+        case '\n':
+        case '\r':
+            break;
+        case '}':
+            if (in_field) return make_gsl_err(gsl_FAIL);
+            in_field = true;
+            break;
+        case '{':
+            if (!in_field) return make_gsl_err(gsl_FAIL);
+            if (got_tag) got_size = true;
+            break;
+        case ' ':
+            got_separ = true;
+            break;
+        case 'L':
+            got_tag = true;
+            break;
+        default:
+            if (!in_field) return make_gsl_err(gsl_FAIL);
+            if (got_tag) return make_gsl_err(gsl_FAIL);
+            if (!isalnum(*c))  return make_gsl_err(gsl_FAIL);
+            b = c;
+            chunk_size++;
+            break;
+        }
+        if (got_size) {
+            if (DEBUG_PARSER_LEVEL_2)
+                gsl_log("  ++ got size value to parse: \"%.*s\"!",
+                        chunk_size, b);
+            *val = b;
+            *val_size = chunk_size;
+            *total_trailer_size = rec_size - i;
+             return make_gsl_err(gsl_OK);
+        }
+    }
+
+    return make_gsl_err(gsl_FAIL);
+}
+
 gsl_err_t gsl_parse_task(const char *rec,
                          size_t *total_size,
                          struct gslTaskSpec *specs,
@@ -1077,7 +1134,7 @@ gsl_parse_array(void *obj,
 
             assert(is_atomic);  // |is_item| is used only with atomic elements
 
-            if (DEBUG_PARSER_LEVEL_2)
+            if (DEBUG_PARSER_LEVEL_3)
                 gsl_log("  == got new item: \"%.*s\"",
                         (int)(e - b), b);
 
