@@ -43,6 +43,8 @@ static gsl_err_t run_set_name(void *obj, const char *name, size_t name_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
     ck_assert(name); ck_assert_uint_ne(name_size, 0);
+    if (!name_size)
+        return make_gsl_err_external(gsl_FORMAT);  // error: name is required, return gsl_FORMAT to match .buf & .parse cases
     if (name_size > sizeof self->name)
         return make_gsl_err_external(gsl_LIMIT);  // error: too long, return gsl_LIMIT to match .buf case
     if (self->name_size)
@@ -56,7 +58,7 @@ static gsl_err_t run_set_default_sid(void *obj, const char *val, size_t val_size
     struct User *self = (struct User *)obj;
     ck_assert(self);
     ck_assert(!val); ck_assert_uint_eq(val_size, 0);
-    return make_gsl_err(gsl_FORMAT);  // error: sid is required, return gsl_FORMAT to match .buf & .run cases
+    return make_gsl_err_external(gsl_FORMAT);  // error: sid is required, return gsl_FORMAT to match .buf & .run cases
 }
 
 static gsl_err_t parse_sid(void *obj, const char *rec, size_t *total_size) {
@@ -78,6 +80,9 @@ static gsl_err_t parse_sid(void *obj, const char *rec, size_t *total_size) {
         }
     };
 
+    if (self->sid_size)
+        return make_gsl_err_external(gsl_EXISTS);  // error: already specified, return gsl_EXISTS to match .buf & .run cases
+
     return gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
 }
 
@@ -85,10 +90,12 @@ static gsl_err_t run_set_sid(void *obj, const char *sid, size_t sid_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
     ck_assert(sid);
-    if (sid_size == 0)
-        return make_gsl_err(gsl_FORMAT);  // error: sid is required, return gsl_FORMAT to match .buf & .parse cases
+    if (!sid_size)
+        return make_gsl_err_external(gsl_FORMAT);  // error: sid is required, return gsl_FORMAT to match .buf & .parse cases
     if (sid_size > sizeof self->sid)
-        return make_gsl_err(gsl_LIMIT);
+        return make_gsl_err_external(gsl_LIMIT);
+    if (self->sid_size)
+        return make_gsl_err_external(gsl_EXISTS);  // error: already specified, return gsl_EXISTS to match .buf & .parse cases
     memcpy(self->sid, sid, sid_size);
     self->sid_size = sid_size;
     return make_gsl_err(gsl_OK);
@@ -388,6 +395,22 @@ START_TEST(parse_task_empty_with_closing_brace)
     ck_assert_int_eq(rc.code, gsl_NO_MATCH);
 END_TEST
 
+START_TEST(parse_task_with_spaces)
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_NAME));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {name John Smith}}   ", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "   {user {name John Smith}}   ", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+END_TEST
+
 static void
 check_parse_implied_field(struct gslTaskSpec *specs,
                           size_t num_specs,
@@ -491,20 +514,6 @@ START_TEST(parse_implied_field_with_spaces)
 
     // Case #2: .run
     check_parse_implied_field_with_spaces(SPEC_RUN);
-END_TEST
-
-START_TEST(parse_implied_field_unknown)
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0), gen_default_spec(&user));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-    rc = gsl_parse_task(rec = "{user John Smith}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
-
-    rc = gsl_parse_task(rec = "{user John Smith{sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
-
-    rc = gsl_parse_task(rec = "{user John Smith {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
 END_TEST
 
 static void
@@ -611,6 +620,20 @@ START_TEST(parse_implied_field_size_NAME_SIZE_plus_one)
     check_parse_implied_field_size_NAME_SIZE_plus_one(SPEC_RUN);
 END_TEST
 
+START_TEST(parse_implied_field_unknown)
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user John Smith}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+
+    rc = gsl_parse_task(rec = "{user John Smith{sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+
+    rc = gsl_parse_task(rec = "{user John Smith {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+END_TEST
+
 START_TEST(parse_implied_field_duplicate)
     // Case #1: .buf & .name
   {
@@ -660,6 +683,27 @@ START_TEST(parse_implied_field_not_first)
 
     // Case #2: .run
     check_parse_implied_field_not_first(SPEC_RUN);
+END_TEST
+
+START_TEST(parse_implied_field_with_braces)
+    // Case #1: .buf
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user Jo{hn Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+    user.name_size = 0;  // reset
+  }
+
+    // Case #2: .run
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_RUN));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user Jo{hn Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+  }
 END_TEST
 
 START_TEST(parse_tag_empty)
@@ -729,79 +773,158 @@ START_TEST(parse_tag_with_leading_spaces)
     ck_assert_int_eq(rc.code, gsl_FORMAT);
 END_TEST
 
-static void
-check_parse_value_terminal_empty(int sid_flags) {
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, sid_flags));
+START_TEST(parse_value)
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_NAME), gen_sid_spec(&user, 0));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user{sid}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
+    rc = gsl_parse_task(rec = "{user{name John Smith}{sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.name_size = 0; user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
 
-    rc = gsl_parse_task(rec = "{user{sid{}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
+    rc = gsl_parse_task(rec = "{user {name John Smith}{sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.name_size = 0; user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
 
-    rc = gsl_parse_task(rec = "{user{sid   }}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
+    rc = gsl_parse_task(rec = "{user {name John Smith} {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+END_TEST
 
-    rc = gsl_parse_task(rec = "{user{sid   {}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
+START_TEST(parse_value_with_spaces)
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_NAME), gen_sid_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user {sid}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user   {name John Smith} {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.name_size = 0; user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user   {name John Smith}   {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.name_size = 0; user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user   {name John Smith}   {sid 123456}   }", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+END_TEST
+
+START_TEST(parse_value_unordered)
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_NAME), gen_sid_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456} {name John Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+END_TEST
+
+START_TEST(parse_value_named_empty)
+    // Case #1: .buf  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid }}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_FORMAT);
 
     rc = gsl_parse_task(rec = "{user {sid{}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_FORMAT);
 
-    rc = gsl_parse_task(rec = "{user {sid   }}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {sid}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_FORMAT);
+  }
 
-    rc = gsl_parse_task(rec = "{user {sid   {}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-}
-
-START_TEST(parse_value_terminal_empty)
-    check_parse_value_terminal_empty(SPEC_BUF);
-
-    check_parse_value_terminal_empty(SPEC_PARSE);
-
-    check_parse_value_terminal_empty(SPEC_RUN);
-END_TEST
-
-START_TEST(parse_value_terminal_with_spaces)
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0));
+    // Case #2: .run  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_RUN));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user{sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
-    user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {sid }}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_FORMAT);
 
-    rc = gsl_parse_task(rec = "{user{sid   123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
-    user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {sid{}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
 
-    rc = gsl_parse_task(rec = "{user{sid   123456   }}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
-    user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {sid}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_FORMAT);
+  }
 
-    rc = gsl_parse_task(rec = "{user{sid   123456   }   }", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
-    user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    // Case #3: .parse
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_PARSE));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid }}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user {sid{}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user {sid}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_FORMAT);
+  }
+END_TEST
+
+START_TEST(parse_value_named)
+    // Case #1: .buf  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
-    user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    user.sid_size = 0;  // reset
+  }
 
-    rc = gsl_parse_task(rec = "{user {sid   123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    // Case #2: .run  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_RUN));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.sid_size = 0;  // reset
+  }
+
+    // Case #3: .parse
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_PARSE));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+  }
+END_TEST
+
+START_TEST(parse_value_named_with_spaces)
+    // Case #1: .buf  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456   }}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
@@ -811,58 +934,202 @@ START_TEST(parse_value_terminal_with_spaces)
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
-    user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    user.sid_size = 0;  // reset
+  }
 
-    rc = gsl_parse_task(rec = "{user {sid   123456   }   }", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
-END_TEST
-
-static void
-check_parse_value_terminal_max_size(int sid_flags) {
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, sid_flags));
+    // Case #2: .run  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_RUN));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user{sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {sid 123456   }}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
     user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
 
-    rc = gsl_parse_task(rec = "{user {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {sid   123456   }}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
     user.sid_size = 0;  // reset
-}
+  }
 
-START_TEST(parse_value_terminal_max_size)
-    check_parse_value_terminal_max_size(SPEC_BUF);
-
-    check_parse_value_terminal_max_size(SPEC_PARSE);
-
-    check_parse_value_terminal_max_size(SPEC_RUN);
-END_TEST
-
-static void
-check_parse_value_terminal_max_size_plus_one(int sid_flags) {
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, sid_flags));
+    // Case #3: .parse
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_PARSE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user{sid 1234567}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {sid 123456   }}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user {sid   123456   }}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+  }
+END_TEST
+
+START_TEST(parse_value_named_max_size)
+    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 's', 'i', 'd', ' ', [11 ... sizeof user.sid + 10] = '1', '}', '}', '\0' };
+
+    // Case #1: .buf  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, strchr(input, '1'), sizeof user.sid);
+    user.sid_size = 0;  // reset
+  }
+
+    // Case #2: .run  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_RUN));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, strchr(input, '1'), sizeof user.sid);
+    user.sid_size = 0;  // reset
+  }
+
+    // Case #3: .parse
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_PARSE));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, strchr(input, '1'), sizeof user.sid);
+  }
+END_TEST
+
+START_TEST(parse_value_named_max_size_plus_one)
+    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 's', 'i', 'd', ' ', [11 ... sizeof user.sid + 11] = '1', '}', '}', '\0' };
+
+    // Case #1: .buf  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_LIMIT);
+  }
 
-    rc = gsl_parse_task(rec = "{user {sid 1234567}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    // Case #2: .run  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_RUN));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_LIMIT);
+  }
+
+    // Case #3: .parse
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_PARSE));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_LIMIT);
-}
+  }
+END_TEST
 
-START_TEST(parse_value_terminal_max_size_plus_one)
-    check_parse_value_terminal_max_size_plus_one(SPEC_BUF);
+START_TEST(parse_value_named_unknown)
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    check_parse_value_terminal_max_size_plus_one(SPEC_PARSE);
+    rc = gsl_parse_task(rec = "{user {si 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
 
-    check_parse_value_terminal_max_size_plus_one(SPEC_RUN);
+    rc = gsl_parse_task(rec = "{user {sido 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+END_TEST
+
+START_TEST(parse_value_named_duplicate)
+    // Case #1: .buf  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456} {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_EXISTS);
+    user.sid_size = 0;  // reset
+  }
+
+    // Case #2: .run  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_RUN));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456} {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_EXISTS);
+    user.sid_size = 0;  // reset
+  }
+
+    // Case #3: .parse
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_PARSE));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456} {sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_EXISTS);
+  }
+END_TEST
+
+START_TEST(parse_value_named_with_braces)
+    // Case #1: .buf  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid{123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user {sid {123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user {sid 123{456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+  }
+
+    // Case #2: .run  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_RUN));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid{123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user {sid {123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user {sid 123{456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+  }
+
+    // Case #3: .parse
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_PARSE));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid{123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+
+    rc = gsl_parse_task(rec = "{user {sid {123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+
+    rc = gsl_parse_task(rec = "{user {sid 123{456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+  }
 END_TEST
 
 static void
@@ -883,35 +1150,13 @@ check_parse_value_terminal_NAME_SIZE_plus_one(int sid_flags) {
   }
 }
 
+// TODO(ki.stfu): ignore GSL_NAME_SIZE limit and remove this test case
 START_TEST(parse_value_terminal_NAME_SIZE_plus_one)
     check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_BUF);
 
     check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_PARSE);
 
     check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_RUN);
-END_TEST
-
-START_TEST(parse_value_terminal_with_braces)
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-    rc = gsl_parse_task(rec = "{user{sid{123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-
-    rc = gsl_parse_task(rec = "{user{sid {123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-
-    rc = gsl_parse_task(rec = "{user{sid 123{456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-
-    rc = gsl_parse_task(rec = "{user {sid{123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-
-    rc = gsl_parse_task(rec = "{user {sid {123456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-
-    rc = gsl_parse_task(rec = "{user {sid 123{456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
 END_TEST
 
 START_TEST(parse_value_validate_empty)
@@ -1820,26 +2065,34 @@ int main() {
     tcase_add_test(tc_get, parse_task_empty);
     tcase_add_test(tc_get, parse_task_empty_with_spaces);
     tcase_add_test(tc_get, parse_task_empty_with_closing_brace);
+    tcase_add_test(tc_get, parse_task_with_spaces);
     tcase_add_test(tc_get, parse_implied_field);
     tcase_add_test(tc_get, parse_implied_field_with_name);
     tcase_add_test(tc_get, parse_implied_field_with_spaces);
-    tcase_add_test(tc_get, parse_implied_field_unknown);
     tcase_add_test(tc_get, parse_implied_field_max_size);
     tcase_add_test(tc_get, parse_implied_field_max_size_plus_one);
     tcase_add_test(tc_get, parse_implied_field_size_NAME_SIZE_plus_one);
+    tcase_add_test(tc_get, parse_implied_field_unknown);
     tcase_add_test(tc_get, parse_implied_field_duplicate);
     tcase_add_test(tc_get, parse_implied_field_not_first);
+    tcase_add_test(tc_get, parse_implied_field_with_braces);
     tcase_add_test(tc_get, parse_tag_empty);
     tcase_add_test(tc_get, parse_tag);
     tcase_add_test(tc_get, parse_tag_unknown);
     tcase_add_test(tc_get, parse_tag_with_leading_spaces);
-    // TODO parse_value_named_duplicate
-    tcase_add_test(tc_get, parse_value_terminal_empty);
-    tcase_add_test(tc_get, parse_value_terminal_with_spaces);
-    tcase_add_test(tc_get, parse_value_terminal_max_size);
-    tcase_add_test(tc_get, parse_value_terminal_max_size_plus_one);
+    tcase_add_test(tc_get, parse_value);
+    tcase_add_test(tc_get, parse_value_with_spaces);
+    tcase_add_test(tc_get, parse_value_unordered);
+    tcase_add_test(tc_get, parse_value_named_empty);
+    tcase_add_test(tc_get, parse_value_named);
+    tcase_add_test(tc_get, parse_value_named_with_spaces);
+    tcase_add_test(tc_get, parse_value_named_max_size);
+    tcase_add_test(tc_get, parse_value_named_max_size_plus_one);
+    tcase_add_test(tc_get, parse_value_named_unknown);
+    tcase_add_test(tc_get, parse_value_named_duplicate);
+    tcase_add_test(tc_get, parse_value_named_with_braces);
     tcase_add_test(tc_get, parse_value_terminal_NAME_SIZE_plus_one);
-    tcase_add_test(tc_get, parse_value_terminal_with_braces);
+    // TODO(ki.stfu): refactor staring from this point
     tcase_add_test(tc_get, parse_value_validate_empty);
     tcase_add_test(tc_get, parse_value_validate_single);
     tcase_add_test(tc_get, parse_value_validate_several);
