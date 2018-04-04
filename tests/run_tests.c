@@ -12,8 +12,12 @@
 struct User {
     char name[GSL_SHORT_NAME_SIZE]; size_t name_size;
     char sid[6]; size_t sid_size;
-    char email[GSL_SHORT_NAME_SIZE]; size_t email_size; enum { EMAIL_NONE, EMAIL_HOME, EMAIL_WORK } email_type;
+    char email[GSL_SHORT_NAME_SIZE]; size_t email_size;
+    char mobile[GSL_SHORT_NAME_SIZE]; size_t mobile_size;
     struct Group { char gid[GSL_SHORT_NAME_SIZE]; size_t gid_size; } groups[USER_GROUPS_MAX_SIZE]; size_t num_groups;
+
+    // TODO(ki.stfu): delete it
+    enum { EMAIL_NONE, EMAIL_HOME, EMAIL_WORK } email_type;
 };
 
 // --------------------------------------------------------------------------------
@@ -26,10 +30,13 @@ static void test_case_fixture_setup(void) {
     extern struct User user;
     user.name_size = 0;
     user.sid_size = 0;
-    user.email_size = 0; user.email_type = EMAIL_NONE;
+    user.email_size = 0;
+    user.mobile_size = 0;
     for (size_t i = 0; i < user.num_groups; i++)
         user.groups[i].gid_size = 0;
     user.num_groups = 0;
+
+    user.email_type = EMAIL_NONE;
 }
 
 static gsl_err_t parse_user(void *obj, const char *rec, size_t *total_size) {
@@ -99,6 +106,63 @@ static gsl_err_t run_set_sid(void *obj, const char *sid, size_t sid_size) {
     memcpy(self->sid, sid, sid_size);
     self->sid_size = sid_size;
     return make_gsl_err(gsl_OK);
+}
+
+static gsl_err_t run_set_default_email_or_mobile(void *obj, const char *val, size_t val_size) {
+    struct User *self = (struct User *)obj;
+    ck_assert(self);
+    ck_assert(!val); ck_assert_uint_eq(val_size, 0);
+    return make_gsl_err_external(gsl_FORMAT);  // error: email/mobile is required
+}
+
+static gsl_err_t parse_contacts(void *obj,
+                                const char *name, size_t name_size,
+                                const char *rec, size_t *total_size) {
+    struct User *self = (struct User *)obj;
+    ck_assert(self);
+    ck_assert(name); ck_assert_uint_ne(name_size, 0);
+    ck_assert(rec); ck_assert(total_size);
+
+    if (name_size == strlen("email") && !memcmp(name, "email", name_size)) {
+        if (self->email_size)
+            return make_gsl_err_external(gsl_EXISTS);  // error: already specified
+
+        struct gslTaskSpec specs[] = {
+            {
+              .is_implied = true,
+              .buf = self->email,
+              .buf_size = &self->email_size,
+              .max_buf_size = sizeof self->email
+            },
+            {
+              .is_default = true,
+              .run = run_set_default_email_or_mobile,
+              .obj = self
+            }
+        };
+        return gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
+    }
+    else if (name_size == strlen("mobile") && !memcmp(name, "mobile", name_size)) {
+        if (self->mobile_size)
+            return make_gsl_err_external(gsl_EXISTS);  // error: already specified
+
+        struct gslTaskSpec specs[] = {
+            {
+              .is_implied = true,
+              .buf = self->mobile,
+              .buf_size = &self->mobile_size,
+              .max_buf_size = sizeof self->mobile
+            },
+            {
+              .is_default = true,
+              .run = run_set_default_email_or_mobile,
+              .obj = self
+            }
+        };
+        return gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
+    }
+
+    return make_gsl_err_external(gsl_NO_MATCH);  // error: unknown contact type
 }
 
 static gsl_err_t run_set_default_email(void *obj, const char *val, size_t val_size) {
@@ -328,6 +392,15 @@ static struct gslTaskSpec gen_sid_spec(struct User *self, int flags) {
                                  .name = "sid", .name_size = strlen("sid"),
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .buf = self->sid, .buf_size = &self->sid_size, .max_buf_size = sizeof self->sid };
+}
+
+static struct gslTaskSpec gen_contacts_spec(struct User *self, int flags) {
+    // TODO(ki.stfu): Add SPEC_CHANGE
+    assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
+    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
+                                 .is_validator = true,
+                                 .is_selector = (flags & SPEC_SELECTOR),
+                                 .validate = parse_contacts, .obj = self };
 }
 
 static struct gslTaskSpec gen_email_spec(struct User *self, int flags) {
@@ -1160,184 +1233,96 @@ START_TEST(parse_value_terminal_NAME_SIZE_plus_one)
 END_TEST
 
 START_TEST(parse_value_validate_empty)
-    DEFINE_TaskSpecs(parse_user_args, gen_email_spec(&user, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_contacts_spec(&user, 0));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user{email}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {email }}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user {email{}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
 
     rc = gsl_parse_task(rec = "{user {email}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_FORMAT);
 
-    rc = gsl_parse_task(rec = "{user {email{home}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {mobile }}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_FORMAT);
 
-    rc = gsl_parse_task(rec = "{user {email{home{}}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);  // error: empty tag, but .validate has been ?successfully? called
+    rc = gsl_parse_task(rec = "{user {mobile{}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
 
-    rc = gsl_parse_task(rec = "{user {email{home   }}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
-
-    rc = gsl_parse_task(rec = "{user {email{home   {}}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);  // error: empty tag, but .validate has been ?successfully? called
-
-    rc = gsl_parse_task(rec = "{user {email {home}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
-
-    rc = gsl_parse_task(rec = "{user {email {home{}}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);  // error: empty tag, but .validate has been ?successfully? called
-
-    rc = gsl_parse_task(rec = "{user {email {home   }}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
-
-    rc = gsl_parse_task(rec = "{user {email {home   {}}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);  // error: empty tag, but .validate has been ?successfully? called
-
-    rc = gsl_parse_task(rec = "{user {email{home}{work}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
-
-    rc = gsl_parse_task(rec = "{user {email{home} {work}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
-
-    rc = gsl_parse_task(rec = "{user {email {home}{work}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
-
-    rc = gsl_parse_task(rec = "{user {email {home} {work}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_NONE); ck_assert_uint_eq(user.email_size, 0);
-    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {mobile}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_FORMAT);
 END_TEST
 
-START_TEST(parse_value_validate_single)
-    DEFINE_TaskSpecs(parse_user_args, gen_email_spec(&user, 0));
+START_TEST(parse_value_validate)
+    DEFINE_TaskSpecs(parse_user_args, gen_contacts_spec(&user, 0));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user {email{home john@iserver.com}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {email john@iserver.com}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_HOME); ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
-    user.email_type = EMAIL_NONE; user.email_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
+    user.email_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
 
-    rc = gsl_parse_task(rec = "{user {email{work j.smith@gogel.com}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {mobile +1 724-227-0844}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_WORK); ASSERT_STR_EQ(user.email, user.email_size, "j.smith@gogel.com");
-    user.email_type = EMAIL_NONE; user.email_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    ASSERT_STR_EQ(user.mobile, user.mobile_size, "+1 724-227-0844");
+    user.mobile_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
 
-    rc = gsl_parse_task(rec = "{user {email {home john@iserver.com}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {email john@iserver.com} {mobile +1 724-227-0844}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_HOME); ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
-    user.email_type = EMAIL_NONE; user.email_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
-
-    rc = gsl_parse_task(rec = "{user {email {work j.smith@gogel.com}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_WORK); ASSERT_STR_EQ(user.email, user.email_size, "j.smith@gogel.com");
+    ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
+    ASSERT_STR_EQ(user.mobile, user.mobile_size, "+1 724-227-0844");
 END_TEST
 
-START_TEST(parse_value_validate_several)
-    DEFINE_TaskSpecs(parse_user_args, gen_email_spec(&user, 0));
+START_TEST(parse_value_validate_unknown)
+    DEFINE_TaskSpecs(parse_user_args, gen_contacts_spec(&user, 0));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    rc = gsl_parse_task(rec = "{user {email{home john@iserver.com}{work j.smith@gogel.com}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FAIL);  // defined in parse_email_record()
-    user.email_type = EMAIL_NONE; user.email_size = 0; RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {emai john@iserver.com}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_NO_MATCH);
 
-    rc = gsl_parse_task(rec = "{user {email{home john@iserver.com} {work j.smith@gogel.com}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FAIL);  // defined in parse_email_record()
-    user.email_type = EMAIL_NONE; user.email_size = 0; RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {emailo john@iserver.com}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_NO_MATCH);
 
-    rc = gsl_parse_task(rec = "{user {email {home john@iserver.com}{work j.smith@gogel.com}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FAIL);  // defined in parse_email_record()
-    user.email_type = EMAIL_NONE; user.email_size = 0; RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    rc = gsl_parse_task(rec = "{user {mobil +1 724-227-0844}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_NO_MATCH);
 
-    rc = gsl_parse_task(rec = "{user {email {home john@iserver.com} {work j.smith@gogel.com}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FAIL);  // defined in parse_email_record()
+    rc = gsl_parse_task(rec = "{user {mobileo +1 724-227-0844}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_NO_MATCH);
 END_TEST
 
-START_TEST(parse_value_validate_max_size)
-    DEFINE_TaskSpecs(parse_user_args, gen_email_spec(&user, 0));
+START_TEST(parse_value_validate_duplicate)
+    DEFINE_TaskSpecs(parse_user_args, gen_contacts_spec(&user, 0));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 'e', 'm', 'a', 'i', 'l', '{', 'h', 'o', 'm', 'e', ' ', [18 ... GSL_SHORT_NAME_SIZE + 17] = 'b', '}', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {email john@iserver.com} {email j.smith@gogel.com}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_EXISTS);
+    user.email_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user {mobile +1 724-227-0844} {mobile +1 410-848-4981}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_EXISTS);
+END_TEST
+
+START_TEST(parse_value_validate_unordered)
+    DEFINE_TaskSpecs(parse_user_args, gen_contacts_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {email john@iserver.com} {mobile +1 724-227-0844}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_HOME); ASSERT_STR_EQ(user.email, user.email_size, strchr(buf, 'b'), GSL_SHORT_NAME_SIZE);
-  }
-  user.email_type = EMAIL_NONE; user.email_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+    ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
+    ASSERT_STR_EQ(user.mobile, user.mobile_size, "+1 724-227-0844");
+    user.email_size = 0; user.mobile_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
 
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 'e', 'm', 'a', 'i', 'l', ' ', '{', 'w', 'o', 'r', 'k', ' ', [19 ... GSL_SHORT_NAME_SIZE + 18] = 'b', '}', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
+    rc = gsl_parse_task(rec = "{user {mobile +1 724-227-0844} {email john@iserver.com}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ck_assert_int_eq(user.email_type, EMAIL_WORK); ASSERT_STR_EQ(user.email, user.email_size, strchr(buf, 'b'), GSL_SHORT_NAME_SIZE);
-  }
-END_TEST
-
-START_TEST(parse_value_validate_max_size_plus_one)
-    DEFINE_TaskSpecs(parse_user_args, gen_email_spec(&user, 0));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 'e', 'm', 'a', 'i', 'l', '{', 'h', 'o', 'm', 'e', ' ', [18 ... GSL_SHORT_NAME_SIZE + 18] = 'b', '}', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 'e', 'm', 'a', 'i', 'l', ' ', '{', 'w', 'o', 'r', 'k', ' ', [19 ... GSL_SHORT_NAME_SIZE + 19] = 'b', '}', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-END_TEST
-
-START_TEST(parse_value_validate_NAME_SIZE_plus_one)
-    DEFINE_TaskSpecs(parse_user_args, gen_email_spec(&user, 0));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 'e', 'm', 'a', 'i', 'l', '{', 'h', 'o', 'm', 'e', ' ', [18 ... GSL_NAME_SIZE + 18] = 'b', '}', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 'e', 'm', 'a', 'i', 'l', ' ', '{', 'w', 'o', 'r', 'k', ' ', [19 ... GSL_NAME_SIZE + 19] = 'b', '}', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
+    ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
+    ASSERT_STR_EQ(user.mobile, user.mobile_size, "+1 724-227-0844");
 END_TEST
 
 static void
@@ -2092,13 +2077,12 @@ int main() {
     tcase_add_test(tc_get, parse_value_named_duplicate);
     tcase_add_test(tc_get, parse_value_named_with_braces);
     tcase_add_test(tc_get, parse_value_terminal_NAME_SIZE_plus_one);
-    // TODO(ki.stfu): refactor staring from this point
     tcase_add_test(tc_get, parse_value_validate_empty);
-    tcase_add_test(tc_get, parse_value_validate_single);
-    tcase_add_test(tc_get, parse_value_validate_several);
-    tcase_add_test(tc_get, parse_value_validate_max_size);
-    tcase_add_test(tc_get, parse_value_validate_max_size_plus_one);
-    tcase_add_test(tc_get, parse_value_validate_NAME_SIZE_plus_one);
+    tcase_add_test(tc_get, parse_value_validate);
+    tcase_add_test(tc_get, parse_value_validate_unknown);
+    tcase_add_test(tc_get, parse_value_validate_duplicate);
+    tcase_add_test(tc_get, parse_value_validate_unordered);
+    // TODO(ki.stfu): refactor staring from this point
     tcase_add_test(tc_get, parse_value_default);
     tcase_add_test(tc_get, parse_value_default_with_selectors);
     tcase_add_test(tc_get, parse_value_unmatched_braces);
