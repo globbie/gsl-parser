@@ -822,6 +822,55 @@ START_TEST(parse_value_unordered)
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
 END_TEST
 
+static void
+check_parse_value_unmatched_braces(int sid_flags) {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, sid_flags));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456)}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+    user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);  // FIXME(ki.stfu): don't reset specs[0].is_completed
+
+    rc = gsl_parse_task(rec = "{user {sid 123456]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+    user.sid_size = 0;  // reset
+}
+
+START_TEST(parse_value_unmatched_type)
+    // TODO(ki.stfu): ...
+END_TEST
+
+START_TEST(parse_value_unmatched_braces)
+    // Case #1: .buf  (terminal)
+    check_parse_value_unmatched_braces(SPEC_BUF);
+
+    // Case #2: .run  (terminal)
+    check_parse_value_unmatched_braces(SPEC_RUN);
+
+    // Case #3: .parse
+    check_parse_value_unmatched_braces(SPEC_PARSE);
+
+    // Case #4: change cases  // TODO(ki.stfu): move to GSL_CHANGE_STATE cases
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_CHANGE));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user (sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user (sid 123456]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+  }
+END_TEST
+
+START_TEST(parse_value_absent_braces)
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid 123456", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FAIL);  // TODO(ki.stfu): ?? use gsl_INCOMPLETE
+END_TEST
+
 START_TEST(parse_value_named_empty)
     // Case #1: .buf  (terminal)
   {
@@ -1376,37 +1425,6 @@ START_TEST(parse_value_default_with_selectors)
   }
 END_TEST
 
-START_TEST(parse_value_unmatched_braces)
-    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_NAME));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-    rc = gsl_parse_task(rec = "{user{name John Smith})", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-    user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);  // FIXME(ki.stfu): don't reset specs[0].is_completed
-
-    rc = gsl_parse_task(rec = "{user {name John Smith})", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-    user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);  // FIXME(ki.stfu): don't reset specs[0].is_completed
-
-    rc = gsl_parse_task(rec = "{user John Smith)", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-    user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);  // FIXME(ki.stfu): don't reset specs[0].is_completed
-
-    rc = gsl_parse_task(rec = "(user{name John Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
-
-    rc = gsl_parse_task(rec = "(user {name John Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
-END_TEST
-
-START_TEST(parse_value_absent_braces)
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-    rc = gsl_parse_task(rec = "{user {sid 123456", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FAIL);  // TODO(ki.stfu): ?? use gsl_INCOMPLETE
-END_TEST
-
 START_TEST(parse_comment_empty)
     DEFINE_TaskSpecs(parse_user_args);
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
@@ -1944,6 +1962,8 @@ int main() {
     tcase_add_test(tc_get, parse_value);
     tcase_add_test(tc_get, parse_value_with_spaces);
     tcase_add_test(tc_get, parse_value_unordered);
+    tcase_add_test(tc_get, parse_value_unmatched_braces);
+    tcase_add_test(tc_get, parse_value_absent_braces);
     tcase_add_test(tc_get, parse_value_named_empty);
     tcase_add_test(tc_get, parse_value_named);
     tcase_add_test(tc_get, parse_value_named_with_spaces);
@@ -1963,8 +1983,6 @@ int main() {
     tcase_add_test(tc_get, parse_value_default_ignored);
     tcase_add_test(tc_get, parse_value_default_with_selectors);
     // TODO(ki.stfu): refactor staring from this point
-    tcase_add_test(tc_get, parse_value_unmatched_braces);
-    tcase_add_test(tc_get, parse_value_absent_braces);
     tcase_add_test(tc_get, parse_comment_empty);
     tcase_add_test(tc_get, parse_comment);
     tcase_add_test(tc_get, parse_comment_unmatched_braces);

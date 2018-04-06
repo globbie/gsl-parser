@@ -371,7 +371,7 @@ gsl_check_matching_closing_brace(const char *c, bool in_change, bool in_array)
         if (in_change && !in_array) return make_gsl_err(gsl_OK);
         break;
     case ']':
-        assert(!in_change && "in_change can not be set");
+        assert(!in_change && "in_change can not be set");  // TODO(ki.stfu): fix this
         if (in_array) return make_gsl_err(gsl_OK);
         break;
     default:
