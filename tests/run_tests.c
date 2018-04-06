@@ -822,6 +822,17 @@ START_TEST(parse_value_unordered)
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
 END_TEST
 
+START_TEST(parse_value_unmatched_type)
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user (sid 123456)}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+
+    rc = gsl_parse_task(rec = "{user [sid 123456]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+END_TEST
+
 static void
 check_parse_value_unmatched_braces(int sid_flags) {
     DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, sid_flags));
@@ -835,10 +846,6 @@ check_parse_value_unmatched_braces(int sid_flags) {
     ck_assert_int_eq(rc.code, gsl_FORMAT);
     user.sid_size = 0;  // reset
 }
-
-START_TEST(parse_value_unmatched_type)
-    // TODO(ki.stfu): ...
-END_TEST
 
 START_TEST(parse_value_unmatched_braces)
     // Case #1: .buf  (terminal)
@@ -1962,6 +1969,7 @@ int main() {
     tcase_add_test(tc_get, parse_value);
     tcase_add_test(tc_get, parse_value_with_spaces);
     tcase_add_test(tc_get, parse_value_unordered);
+    tcase_add_test(tc_get, parse_value_unmatched_type);
     tcase_add_test(tc_get, parse_value_unmatched_braces);
     tcase_add_test(tc_get, parse_value_absent_braces);
     tcase_add_test(tc_get, parse_value_named_empty);
