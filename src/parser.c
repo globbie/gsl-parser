@@ -642,10 +642,16 @@ gsl_err_t gsl_parse_task(const char *rec,
                 e = c + 1;
                 break;
             }
+
             err = gsl_parse_matching_braces(c, in_change, &chunk_size);
             if (err.code) return err;
-            c += chunk_size;
+
             in_field = false;
+            in_change = false;
+            in_array = false;
+            // in_tag == false
+            // in_terminal == false
+            c += chunk_size;
             b = c;
             e = b;
             break;
