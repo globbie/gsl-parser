@@ -563,7 +563,6 @@ gsl_check_field_terminal_value(const char *val, size_t val_size,
 
 static gsl_err_t
 gsl_check_default(const char *rec,
-                  gsl_task_spec_type type,
                   struct gslTaskSpec *specs,
                   size_t num_specs) {
     struct gslTaskSpec *spec;
@@ -573,7 +572,7 @@ gsl_check_default(const char *rec,
     for (size_t i = 0; i < num_specs; ++i) {
         spec = &specs[i];
 
-        if (spec->is_default && spec->type == type) {
+        if (spec->is_default) {
             assert(default_spec == NULL && "default_spec was already specified");
             default_spec = spec;
             continue;
@@ -822,7 +821,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                     in_implied_field = false;
                 }
 
-                err = gsl_check_default(rec, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs);
+                err = gsl_check_default(rec, specs, num_specs);
                 if (err.code) return err;
 
                 *total_size = c - rec;
