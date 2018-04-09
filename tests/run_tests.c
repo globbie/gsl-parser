@@ -1297,25 +1297,15 @@ START_TEST(parse_value_validate_unordered)
 END_TEST
 
 START_TEST(parse_value_default_no_spec)
-    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, 0), gen_sid_spec(&user, 0), gen_contacts_spec(&user, 0));
+    DEFINE_TaskSpecs(parse_user_args);
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_NO_MATCH);
 END_TEST
 
-START_TEST(parse_value_default_empty)
-    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, 0), gen_sid_spec(&user, 0), gen_contacts_spec(&user, 0), gen_default_spec(&user));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-    rc = gsl_parse_task(rec = "{user}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_OK);
-    ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.name, user.name_size, "(none)");
-END_TEST
-
 static void
-check_parse_value_default_ignored_when_implied_field(int name_flags) {
+check_parse_value_default_when_implied_field(int name_flags) {
     DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, name_flags), gen_default_spec(&user));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
@@ -1327,7 +1317,7 @@ check_parse_value_default_ignored_when_implied_field(int name_flags) {
 }
 
 static void
-check_parse_value_default_ignored_when_value_named(int sid_flags) {
+check_parse_value_default_when_value_named(int sid_flags) {
     DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, sid_flags), gen_default_spec(&user));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
@@ -1338,17 +1328,29 @@ check_parse_value_default_ignored_when_value_named(int sid_flags) {
     user.sid_size = 0;  // reset
 }
 
-START_TEST(parse_value_default_ignored)
-    // Case #1: implied field
-    check_parse_value_default_ignored_when_implied_field(SPEC_BUF);
-    check_parse_value_default_ignored_when_implied_field(SPEC_RUN);
+START_TEST(parse_value_default)
+    // Case #1: no fields
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
-    // Case #2: value named
-    check_parse_value_default_ignored_when_value_named(SPEC_BUF);
-    check_parse_value_default_ignored_when_value_named(SPEC_RUN);
-    check_parse_value_default_ignored_when_value_named(SPEC_PARSE);
+    rc = gsl_parse_task(rec = "{user}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "(none)");
+    user.name_size = 0;  // reset
+  }
 
-    // Case #3: value validate
+    // Case #2: implied field
+    check_parse_value_default_when_implied_field(SPEC_BUF);
+    check_parse_value_default_when_implied_field(SPEC_RUN);
+
+    // Case #3: value named
+    check_parse_value_default_when_value_named(SPEC_BUF);
+    check_parse_value_default_when_value_named(SPEC_RUN);
+    check_parse_value_default_when_value_named(SPEC_PARSE);
+
+    // Case #4: value validate
   {
     DEFINE_TaskSpecs(parse_user_args, gen_contacts_spec(&user, 0), gen_default_spec(&user));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
@@ -1815,6 +1817,135 @@ START_TEST(parse_change_value_validate)
     ASSERT_STR_EQ(user.mobile, user.mobile_size, "+1 724-227-0844");
 END_TEST
 
+START_TEST(parse_change_value_default_no_spec)
+    DEFINE_TaskSpecs(parse_user_args);
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
+
+    rc = gsl_parse_task(rec = "(user)", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_NO_MATCH);
+END_TEST
+
+START_TEST(parse_change_value_default)
+    // Case #1: no fields
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
+
+    rc = gsl_parse_task(rec = "(user)", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "(none)");
+    user.name_size = 0;  // reset
+  }
+
+    // Case #2: implied field
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, 0), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
+
+    rc = gsl_parse_task(rec = "(user John Smith)", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    user.name_size = 0;  // reset
+  }
+
+    // Case #3: value named
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_CHANGE), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
+
+    rc = gsl_parse_task(rec = "(user (sid 123456))", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.sid_size = 0;  // reset
+  }
+
+    // Case #4: value validate
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_contacts_spec(&user, SPEC_CHANGE), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
+
+    rc = gsl_parse_task(rec = "(user (email john@iserver.com))", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
+    user.email_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "(user (mobile +1 724-227-0844))", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.mobile, user.mobile_size, "+1 724-227-0844");
+  }
+END_TEST
+
+START_TEST(parse_change_value_default_with_selectors)
+    // Case #1: implied field with .is_selector
+    // Case #2: implied field with .is_selector, and value named
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_SELECTOR), gen_sid_spec(&user, SPEC_CHANGE), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
+
+    rc = gsl_parse_task(rec = "(user John Smith)", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "(none)");
+    user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "(user John Smith (sid 123456))", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.name_size = 0; user.sid_size = 0;  // reset
+  }
+
+    // Case #3: implied field with .is_selector, and value named with .is_selector
+    // Case #4: implied field with .is_selector, and value named with .is_selector, and value validate
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_SELECTOR), gen_sid_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_contacts_spec(&user, SPEC_CHANGE), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
+
+    rc = gsl_parse_task(rec = "(user John Smith (sid 123456))", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "(none)");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    user.name_size = 0; user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "(user John Smith (sid 123456) (email john@iserver.com))", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
+    user.name_size = 0; user.sid_size = 0; user.email_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "(user John Smith (sid 123456) (mobile +1 724-227-0844))", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    ASSERT_STR_EQ(user.mobile, user.mobile_size, "+1 724-227-0844");
+    user.name_size = 0; user.sid_size = 0; user.mobile_size = 0;  // reset
+  }
+
+    // Case #5: implied field with .is_selector, and value named with .is_selector, and value validate with .is_selector
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_sid_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_contacts_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
+
+    rc = gsl_parse_task(rec = "(user John Smith (sid 123456) (email john@iserver.com) (mobile +1 724-227-0844))", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "(none)");  // TODO(ki.stfu): ?? allow .is_selector with .validate
+    ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+    ASSERT_STR_EQ(user.email, user.email_size, "john@iserver.com");
+    ASSERT_STR_EQ(user.mobile, user.mobile_size, "+1 724-227-0844");
+  }
+END_TEST
+
 START_TEST(parse_change_comment_empty)
     DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_NAME | SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
@@ -2248,8 +2379,7 @@ int main() {
     tcase_add_test(tc_get, parse_value_validate_duplicate);
     tcase_add_test(tc_get, parse_value_validate_unordered);
     tcase_add_test(tc_get, parse_value_default_no_spec);
-    tcase_add_test(tc_get, parse_value_default_empty);
-    tcase_add_test(tc_get, parse_value_default_ignored);
+    tcase_add_test(tc_get, parse_value_default);
     tcase_add_test(tc_get, parse_value_default_with_selectors);
     tcase_add_test(tc_get, parse_comment_empty);
     tcase_add_test(tc_get, parse_comment);
@@ -2272,6 +2402,9 @@ int main() {
     tcase_add_test(tc_change, parse_change_value_named_with_braces);
     tcase_add_test(tc_change, parse_change_value_validate_empty);
     tcase_add_test(tc_change, parse_change_value_validate);
+    tcase_add_test(tc_change, parse_change_value_default_no_spec);
+    tcase_add_test(tc_change, parse_change_value_default);
+    tcase_add_test(tc_change, parse_change_value_default_with_selectors);
     tcase_add_test(tc_change, parse_change_comment_empty);
     tcase_add_test(tc_change, parse_change_comment);
     tcase_add_test(tc_change, parse_change_comment_unmatched_braces);
