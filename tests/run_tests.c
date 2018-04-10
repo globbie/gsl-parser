@@ -1935,7 +1935,7 @@ START_TEST(parse_change_value_default_with_selectors)
 
     // Case #5: implied field with .is_selector, and value named with .is_selector, and value validate with .is_selector
   {
-    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_sid_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_contacts_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_default_spec(&user));
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_SELECTOR), gen_sid_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_contacts_spec(&user, SPEC_SELECTOR | SPEC_CHANGE), gen_default_spec(&user));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, SPEC_CHANGE) };
 
     rc = gsl_parse_task(rec = "(user John Smith (sid 123456) (email john@iserver.com) (mobile +1 724-227-0844))", &total_size, specs, sizeof specs / sizeof specs[0]);
