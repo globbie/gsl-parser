@@ -24,13 +24,14 @@
 static gsl_err_t
 gsl_parse_matching_braces(const char *c,
                           bool in_change,
+                          bool in_array,
                           size_t *chunk_size)
 {
     const char *b = c;
     size_t brace_count = 1;
 
-    const char open_brace = !in_change ? '{' : '(';
-    const char close_brace = !in_change ? '}' : ')';
+    const char open_brace = in_change ? '(' : !in_array ? '{' : '[';
+    const char close_brace = in_change ? ')' : !in_array ? '}' : ']';
 
     for (; *c; c++) {
         if (*c == open_brace)
@@ -45,7 +46,7 @@ gsl_parse_matching_braces(const char *c,
     }
 
     gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
-            (!in_change ? '}' : ')'), 16, b);
+            close_brace, 16, b);
     return make_gsl_err(gsl_FORMAT);
 }
 
@@ -642,7 +643,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 break;
             }
 
-            err = gsl_parse_matching_braces(c, in_change, &chunk_size);
+            err = gsl_parse_matching_braces(c, in_change, in_array, &chunk_size);
             if (err.code) return err;
 
             in_field = false;
@@ -756,7 +757,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 //      or: rec = "{name John [Smith]}"
                 //                            ^  -- same way
                 gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '%c': %.*s",
-                        spec->name_size, spec->name, (!in_change ? '{' : !in_array ? '(' : '['), c - b + 16, b);
+                        spec->name_size, spec->name, (in_change ? '(' : !in_array ? '{' : '['), c - b + 16, b);
                 return make_gsl_err(gsl_FORMAT);
             }
 
@@ -782,7 +783,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 // Example: rec = "{name[John Smith]}"
                 //                      ^  -- same way
                 gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '%c': %.*s",
-                        spec->name_size, spec->name, (!in_change ? '{' : !in_array ? '(' : '['), c - b + 16, b);
+                        spec->name_size, spec->name, (in_change ? '(' : !in_array ? '{' : '['), c - b + 16, b);
                 return make_gsl_err(gsl_FORMAT);
             }
             // else {
