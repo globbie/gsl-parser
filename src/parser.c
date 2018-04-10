@@ -137,13 +137,13 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     if (spec->is_default)
         assert(!spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_list && !spec->is_list_item && !spec->is_atomic);
     if (spec->is_selector)
-        assert(!spec->is_default && !spec->is_list && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_default && !spec->is_list_item && !spec->is_atomic);
     if (spec->is_implied)
         assert(!spec->is_default && !spec->is_validator && !spec->is_list && !spec->is_list_item && !spec->is_atomic);
     if (spec->is_validator)
         assert(!spec->is_default && !spec->is_implied && !spec->is_list && !spec->is_list_item && !spec->is_atomic);
     if (spec->is_list)
-        assert(!spec->is_default && !spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_default && !spec->is_implied && !spec->is_validator && !spec->is_list_item && !spec->is_atomic);
     if (spec->is_list_item)
         assert(!spec->is_default && !spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_list && !spec->is_atomic);
     assert(!spec->is_atomic);  // TODO(ki.stfu): ?? Remove this field
