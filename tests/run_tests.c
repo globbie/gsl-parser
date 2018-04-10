@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <string.h>
 
-#define USER_GROUPS_MAX_SIZE 4  // Note: Don't modify! Some tests rely this is equal to 4.
+#define USER_GROUPS_MAX_SIZE 4  // Note: Don't modify! Some tests rely this is equal to 4.   // TODO(ki.stfu): really?
 
 // --------------------------------------------------------------------------------
 // User -- testable object
@@ -15,6 +15,7 @@ struct User {
     char email[GSL_SHORT_NAME_SIZE]; size_t email_size;
     char mobile[GSL_SHORT_NAME_SIZE]; size_t mobile_size;
     struct Group { char gid[GSL_SHORT_NAME_SIZE]; size_t gid_size; } groups[USER_GROUPS_MAX_SIZE]; size_t num_groups;
+    struct Language { char lang[GSL_SHORT_NAME_SIZE]; size_t lang_size; } languages[1]; size_t num_languages;  // Pseudo array
 };
 
 // --------------------------------------------------------------------------------
@@ -32,6 +33,9 @@ static void test_case_fixture_setup(void) {
     for (size_t i = 0; i < user.num_groups; i++)
         user.groups[i].gid_size = 0;
     user.num_groups = 0;
+    for (size_t i = 0; i < user.num_languages; i++)
+        user.languages[i].lang_size = 0;
+    user.num_languages = 0;
 }
 
 static gsl_err_t parse_user(void *obj, const char *rec, size_t *total_size) {
@@ -242,6 +246,54 @@ static gsl_err_t parse_group_non_atomic(void *obj, const char *rec, size_t *tota
     return gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
 }
 
+static gsl_err_t alloc_language(void *obj, const char *lang, size_t lang_size,
+                                size_t count, void **item) {
+    struct User *self = (struct User *)obj;
+    ck_assert(self);
+    ck_assert(lang); ck_assert_uint_ne(lang_size, 0);
+    ck_assert_uint_eq(count, self->num_languages); ck_assert(item);
+
+    if (self->num_languages == sizeof self->languages / sizeof self->languages[0])
+        return make_gsl_err(gsl_LIMIT);  // TODO(ki.stfu): ?? use gsl_NOMEM
+
+    if (lang_size > sizeof self->languages[0].lang)
+        return make_gsl_err(gsl_LIMIT);
+
+    struct Language *language = &self->languages[self->num_languages++];
+    memcpy(language->lang, lang, lang_size);
+    language->lang_size = lang_size;
+    *item = language;
+    return make_gsl_err(gsl_OK);
+}
+
+static gsl_err_t append_language(void *accu, void *item) {
+    return make_gsl_err(gsl_OK);
+}
+
+static gsl_err_t parse_skills(void *obj,
+                              const char *name, size_t name_size,
+                              const char *rec, size_t *total_size) {
+    struct User *self = (struct User *)obj;
+    ck_assert(self);
+    ck_assert(name); ck_assert_uint_ne(name_size, 0);
+    ck_assert(rec); ck_assert(total_size);
+
+    if (name_size == strlen("languages") && !memcmp(name, "languages", name_size)) {
+        if (self->num_languages)
+            return make_gsl_err_external(gsl_EXISTS);  // error: already specified
+
+        struct gslTaskSpec language_spec = {
+            .is_list_item = true,
+            .alloc = alloc_language,
+            .append = append_language,
+            .accu = obj
+        };
+        return gsl_parse_array(&language_spec, rec, total_size);
+    }
+
+    return make_gsl_err_external(gsl_NO_MATCH);  // error: unknown skill type
+}
+
 #define RESET_IS_COMPLETED(specs, num_specs)   \
     do {                                       \
         for (size_t i = 0; i < num_specs; ++i) \
@@ -345,6 +397,14 @@ static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec* item_spec, int fla
                                  .is_list = true,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .parse = gsl_parse_array, .obj = item_spec };
+}
+
+static struct gslTaskSpec gen_skills_spec(struct User *self, int flags) {
+    assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
+    return (struct gslTaskSpec){ .is_validator = true,
+                                 .is_list = true,
+                                 .is_selector = (flags & SPEC_SELECTOR),
+                                 .validate = parse_skills, .obj = self };
 }
 
 // --------------------------------------------------------------------------------
@@ -2110,6 +2170,8 @@ START_TEST(parse_array_value_empty_with_spaces)
 END_TEST
 
 START_TEST(parse_array_value_selector)
+    // Case #1: atomic & non-atomic values
+  {
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
     DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_SELECTOR), gen_default_spec(&user));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
@@ -2119,6 +2181,20 @@ START_TEST(parse_array_value_selector)
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.name, user.name_size, "(none)");
     ck_assert_uint_eq(user.num_groups, 1); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith");
+    user.name_size = 0; user.groups[0].gid_size = 0; user.num_groups = 0;  // reset
+  }
+
+    // Case #2: value validate
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_skills_spec(&user, SPEC_SELECTOR), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user [languages english]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "(none)");
+    ck_assert_uint_eq(user.num_languages, 1); ASSERT_STR_EQ(user.languages[0].lang, user.languages[0].lang_size, "english");
+  }
 END_TEST
 
 START_TEST(parse_array_value_unmatched_type)
@@ -2273,6 +2349,46 @@ START_TEST(parse_array_value_non_atomic_with_spaces)
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ck_assert_uint_eq(user.num_groups, 3); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith"); ASSERT_STR_EQ(user.groups[1].gid, user.groups[1].gid_size, "audio"); ASSERT_STR_EQ(user.groups[2].gid, user.groups[2].gid_size, "sudo");
+END_TEST
+
+START_TEST(parse_array_value_validate_empty)
+    DEFINE_TaskSpecs(parse_user_args, gen_skills_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user [languages ]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_languages, 0);
+    RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user [languages{}]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user [languages]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_languages, 0);
+END_TEST
+
+START_TEST(parse_array_value_validate)
+    DEFINE_TaskSpecs(parse_user_args, gen_skills_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user [languages english]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_languages, 1); ASSERT_STR_EQ(user.languages[0].lang, user.languages[0].lang_size, "english");
+END_TEST
+
+START_TEST(parse_array_value_validate_unknown)
+    DEFINE_TaskSpecs(parse_user_args, gen_skills_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user [language english]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_NO_MATCH);
+
+    rc = gsl_parse_task(rec = "{user [languageso english]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_NO_MATCH);
 END_TEST
 
 START_TEST(parse_array_comment_empty)
@@ -2442,6 +2558,9 @@ int main() {
     tcase_add_test(tc_array, parse_array_value_atomic_with_spaces);
     tcase_add_test(tc_array, parse_array_value_non_atomic);
     tcase_add_test(tc_array, parse_array_value_non_atomic_with_spaces);
+    tcase_add_test(tc_array, parse_array_value_validate_empty);
+    tcase_add_test(tc_array, parse_array_value_validate);
+    tcase_add_test(tc_array, parse_array_value_validate_unknown);
     tcase_add_test(tc_array, parse_array_comment_empty);
     tcase_add_test(tc_array, parse_array_comment);
     tcase_add_test(tc_array, parse_array_comment_unmatched_braces);
