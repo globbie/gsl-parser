@@ -173,7 +173,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     // Check that they are not mutually exclusive (in general):
 
     if (spec->type) {
-        assert(!spec->is_default && !spec->is_selector && (!spec->is_implied || spec->name != NULL) && !spec->is_list && !spec->is_list_item);
+        assert(!spec->is_default && (!spec->is_implied || spec->name != NULL) && !spec->is_list && !spec->is_list_item);
         // ?? assert(spec->name != NULL);
     }
 
