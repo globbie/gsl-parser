@@ -322,6 +322,7 @@ static gsl_err_t
 gsl_find_spec(const char *name,
               size_t name_size,
               gsl_task_spec_type spec_type,
+              bool spec_type_list,
               struct gslTaskSpec *specs,
               size_t num_specs,
               struct gslTaskSpec **out_spec)
@@ -333,6 +334,7 @@ gsl_find_spec(const char *name,
         spec = &specs[i];
 
         if (spec->type != spec_type) continue;
+        if (spec->is_list != spec_type_list) continue;
 
         if (spec->is_validator) {
             assert(validator_spec == NULL && "validator_spec was already specified");
@@ -441,6 +443,7 @@ static gsl_err_t
 gsl_check_field_tag(const char *name,
                     size_t name_size,
                     gsl_task_spec_type type,
+                    bool spec_type_list,
                     struct gslTaskSpec *specs,
                     size_t num_specs,
                     struct gslTaskSpec **out_spec)
@@ -461,7 +464,7 @@ gsl_check_field_tag(const char *name,
         gsl_log("++ BASIC LOOP got tag after brace: \"%.*s\" [%zu]",
                 name_size, name, name_size);
 
-    err = gsl_find_spec(name, name_size, type, specs, num_specs, out_spec);
+    err = gsl_find_spec(name, name_size, type, spec_type_list, specs, num_specs, out_spec);
     if (err.code) {
         gsl_log("-- no spec found to handle the \"%.*s\" tag: %d",
                 name_size, name, err);
@@ -812,7 +815,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "{name ...
             //                      ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, in_array, specs, num_specs, &spec);
             if (err.code) return err;
 
             if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
@@ -904,7 +907,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             //      or: rec = "[groups{...
             //                        ^  -- same way
 
-            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, in_array, specs, num_specs, &spec);
             if (err.code) return err;
 
             if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
@@ -983,6 +986,7 @@ gsl_err_t gsl_parse_task(const char *rec,
 
                 in_field = false;
                 in_change = false;
+                // in_array == false
                 in_tag = false;
                 in_terminal = false;
                 b = c + 1;
@@ -994,7 +998,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "{name}"
             //                      ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, in_array, specs, num_specs, &spec);
             if (err.code) return err;
 
             if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
@@ -1054,7 +1058,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "[groups]"
             //                        ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, in_array, specs, num_specs, &spec);
             if (err.code) return err;
 
             if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
