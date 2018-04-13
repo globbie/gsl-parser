@@ -661,31 +661,6 @@ START_TEST(parse_implied_field_max_size_plus_one)
   }
 END_TEST
 
-static void
-check_parse_implied_field_size_NAME_SIZE_plus_one(int name_flags) {
-    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, name_flags));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_NAME_SIZE + 6] = 'a', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_NAME_SIZE + 6] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-}
-
-// TODO(ki.stfu): ignore GSL_NAME_SIZE limit and remove this test case
-START_TEST(parse_implied_field_size_NAME_SIZE_plus_one)
-    check_parse_implied_field_size_NAME_SIZE_plus_one(SPEC_BUF);
-
-    check_parse_implied_field_size_NAME_SIZE_plus_one(SPEC_RUN);
-END_TEST
-
 START_TEST(parse_implied_field_unknown)
     DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, 0), gen_default_spec(&user));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
@@ -1304,33 +1279,6 @@ START_TEST(parse_value_named_with_braces)
     rc = gsl_parse_task(rec = "{user {sid 123{456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_NO_MATCH);
   }
-END_TEST
-
-static void
-check_parse_value_terminal_NAME_SIZE_plus_one(int sid_flags) {
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, sid_flags));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', '{', 's', 'i', 'd', ' ', [10 ... GSL_NAME_SIZE + 10] = '1', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 's', 'i', 'd', ' ', [11 ... GSL_NAME_SIZE + 11] = '1', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-}
-
-// TODO(ki.stfu): ignore GSL_NAME_SIZE limit and remove this test case
-START_TEST(parse_value_terminal_NAME_SIZE_plus_one)
-    check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_BUF);
-
-    check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_PARSE);
-
-    check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_RUN);
 END_TEST
 
 START_TEST(parse_value_validate_empty)
@@ -2552,7 +2500,6 @@ int main() {
     tcase_add_test(tc_get, parse_implied_field_with_dashes);
     tcase_add_test(tc_get, parse_implied_field_max_size);
     tcase_add_test(tc_get, parse_implied_field_max_size_plus_one);
-    tcase_add_test(tc_get, parse_implied_field_size_NAME_SIZE_plus_one);
     tcase_add_test(tc_get, parse_implied_field_unknown);
     tcase_add_test(tc_get, parse_implied_field_duplicate);
     tcase_add_test(tc_get, parse_implied_field_not_first);
@@ -2577,7 +2524,6 @@ int main() {
     tcase_add_test(tc_get, parse_value_named_unknown);
     tcase_add_test(tc_get, parse_value_named_duplicate);
     tcase_add_test(tc_get, parse_value_named_with_braces);
-    tcase_add_test(tc_get, parse_value_terminal_NAME_SIZE_plus_one);
     tcase_add_test(tc_get, parse_value_validate_empty);
     tcase_add_test(tc_get, parse_value_validate);
     tcase_add_test(tc_get, parse_value_validate_unknown);

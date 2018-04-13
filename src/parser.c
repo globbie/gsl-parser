@@ -398,7 +398,6 @@ gsl_check_implied_field(const char *val, size_t val_size,
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("++ got implied val: \"%.*s\" [%zu]",
                 val_size, val, val_size);
-    if (val_size > GSL_NAME_SIZE) return make_gsl_err(gsl_LIMIT);
 
     for (size_t i = 0; i < num_specs; i++) {
         spec = &specs[i];
@@ -453,11 +452,6 @@ gsl_check_field_tag(const char *name,
     if (!name_size) {
         gsl_log("-- empty field tag?");
         return make_gsl_err(gsl_FORMAT);
-    }
-    if (name_size > GSL_NAME_SIZE) {
-        gsl_log("-- field tag too large: %zu bytes: \"%.*s\"",
-                name_size, name_size, name);
-        return make_gsl_err(gsl_LIMIT);
     }
 
     if (DEBUG_PARSER_LEVEL_2)
@@ -533,12 +527,6 @@ gsl_check_field_terminal_value(const char *val, size_t val_size,
                                struct gslTaskSpec *spec)
 {
     gsl_err_t err;
-
-    if (val_size > GSL_NAME_SIZE) {
-        gsl_log("-- value too large: %zu bytes: \"%.*s\"",
-                val_size, val_size, val);
-        return make_gsl_err(gsl_LIMIT);
-    }
 
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("++ got terminal val: \"%.*s\" [%zu]",
