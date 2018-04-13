@@ -599,6 +599,8 @@ gsl_err_t gsl_parse_task(const char *rec,
     gsl_err_t err;
 
     c = rec;
+    b = NULL;
+    e = NULL;
 
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("\n\n*** start basic PARSING: \"%.*s\" num specs: %zu [%p]",

@@ -214,7 +214,7 @@ static gsl_err_t alloc_group_non_atomic(void *obj, const char *gid, size_t gid_s
     return make_gsl_err(gsl_OK);
 }
 
-static gsl_err_t append_group(void *accu, void *item) {
+static gsl_err_t append_group(void *accu __attribute__((unused)), void *item __attribute__((unused))) {
     return make_gsl_err(gsl_OK);
 }
 
@@ -267,7 +267,7 @@ static gsl_err_t alloc_language(void *obj, const char *lang, size_t lang_size,
     return make_gsl_err(gsl_OK);
 }
 
-static gsl_err_t append_language(void *accu, void *item) {
+static gsl_err_t append_language(void *accu __attribute__((unused)), void *item __attribute__((unused))) {
     return make_gsl_err(gsl_OK);
 }
 
