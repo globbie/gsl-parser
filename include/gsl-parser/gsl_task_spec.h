@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-typedef enum { GSL_GET_STATE, GSL_CHANGE_STATE, GSL_SET_ARRAY_STATE } gsl_task_spec_type;
+typedef enum { GSL_GET_TYPE, GSL_CHANGE_STATE, GSL_SET_ARRAY_STATE } gsl_task_spec_type;
 
 struct gslTaskSpec {
     gsl_task_spec_type type;
