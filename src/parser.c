@@ -115,7 +115,7 @@ gsl_parse_size_t(void *obj,
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log(".. parse num size_t: \"%.*s\"", 16, rec);
 
-    err = gsl_parse_task(rec, total_size, specs, sizeof(specs) / sizeof(struct gslTaskSpec));
+    err = gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
     if (err.code) return err;
 
     return make_gsl_err(gsl_OK);
