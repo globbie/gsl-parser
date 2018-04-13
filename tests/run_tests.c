@@ -5,17 +5,18 @@
 #include <assert.h>
 #include <string.h>
 
+#define USER_NAME_SIZE 64
 #define USER_GROUPS_MAX_SIZE 4  // Note: Don't modify! Some tests rely this is equal to 4.   // TODO(ki.stfu): really?
 
 // --------------------------------------------------------------------------------
 // User -- testable object
 struct User {
-    char name[GSL_SHORT_NAME_SIZE]; size_t name_size;
+    char name[USER_NAME_SIZE]; size_t name_size;
     char sid[6]; size_t sid_size;
-    char email[GSL_SHORT_NAME_SIZE]; size_t email_size;
-    char mobile[GSL_SHORT_NAME_SIZE]; size_t mobile_size;
-    struct Group { char gid[GSL_SHORT_NAME_SIZE]; size_t gid_size; } groups[USER_GROUPS_MAX_SIZE]; size_t num_groups;
-    struct Language { char lang[GSL_SHORT_NAME_SIZE]; size_t lang_size; } languages[1]; size_t num_languages;  // Pseudo array
+    char email[USER_NAME_SIZE]; size_t email_size;
+    char mobile[USER_NAME_SIZE]; size_t mobile_size;
+    struct Group { char gid[USER_NAME_SIZE]; size_t gid_size; } groups[USER_GROUPS_MAX_SIZE]; size_t num_groups;
+    struct Language { char lang[USER_NAME_SIZE]; size_t lang_size; } languages[1]; size_t num_languages;  // Pseudo array
 };
 
 // --------------------------------------------------------------------------------
@@ -588,30 +589,30 @@ check_parse_implied_field_max_size(int name_flags) {
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
   {
-    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 5] = 'a', '}', '\0' };
+    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 5] = 'a', '}', '\0' };
     rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), GSL_SHORT_NAME_SIZE);
+    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), USER_NAME_SIZE);
     user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
   }
 
   {
-    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 5] = 'a', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
+    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 5] = 'a', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
     rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), GSL_SHORT_NAME_SIZE);
+    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), USER_NAME_SIZE);
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
     user.name_size = 0; user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
   }
 
   {
-    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 5] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
+    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 5] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
     rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), GSL_SHORT_NAME_SIZE);
+    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), USER_NAME_SIZE);
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
     user.name_size = 0; user.sid_size = 0;  // reset
   }
@@ -626,9 +627,9 @@ START_TEST(parse_implied_field_max_size)
 END_TEST
 
 START_TEST(parse_implied_field_max_size_plus_one)
-    const char input1[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 6] = 'a', '}', '\0' };
-    const char input2[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 6] = 'a', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
-    const char input3[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 6] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
+    const char input1[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 6] = 'a', '}', '\0' };
+    const char input2[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 6] = 'a', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
+    const char input3[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 6] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
 
     // Case #1: .buf
   {

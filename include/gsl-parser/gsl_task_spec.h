@@ -5,9 +5,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// TODO(ki.stfu): Delete this
-#define GSL_SHORT_NAME_SIZE 64
-
 typedef enum { GSL_GET_STATE, GSL_CHANGE_STATE } gsl_task_spec_type;
 
 struct gslTaskSpec {
