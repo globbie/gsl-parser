@@ -394,16 +394,16 @@ static struct gslTaskSpec gen_groups_item_spec(struct User *self, int flags) {
 
 static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec* item_spec, int flags) {
     assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
-    return (struct gslTaskSpec){ .name = "groups", .name_size = strlen("groups"),
-                                 .is_list = true,
+    return (struct gslTaskSpec){ .type = GSL_SET_ARRAY_STATE,
+                                 .name = "groups", .name_size = strlen("groups"),
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .parse = gsl_parse_array, .obj = item_spec };
 }
 
 static struct gslTaskSpec gen_skills_spec(struct User *self, int flags) {
     assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
-    return (struct gslTaskSpec){ .is_validator = true,
-                                 .is_list = true,
+    return (struct gslTaskSpec){ .type = GSL_SET_ARRAY_STATE,
+                                 .is_validator = true,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .validate = parse_skills, .obj = self };
 }
