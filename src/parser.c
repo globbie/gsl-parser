@@ -640,13 +640,21 @@ gsl_err_t gsl_parse_task(const char *rec,
             if (!in_field) {
                 // Example: rec = "     {name...
                 //                 ^^^^^  -- ignore spaces
-                //      or: rec = "j smith {name...
-                //                  ^  -- keep spaces in implied field
+                //      or: rec = "j smith  {name...
+                //                  ^     ^^  -- keep spaces in implied field, and ignore them after it
                 break;
             }
             if (in_terminal) {
-                // Example: rec = "{name John Smith...
-                //                           ^  -- keep spaces in terminal value
+                // Example: rec = "{name   John Smith...
+                //                       ^^    ^  -- keep spaces in terminal value, and ignore them before it
+
+                if (b == c) {
+                    // Example: rec = "{name   John Smith...
+                    //                       ^^  -- ignore spaces
+                    b = c + 1;
+                    e = b;
+                }
+
                 break;
             }
 
