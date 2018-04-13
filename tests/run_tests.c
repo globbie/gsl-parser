@@ -566,6 +566,22 @@ START_TEST(parse_implied_field_with_spaces)
     check_parse_implied_field_with_spaces(SPEC_RUN);
 END_TEST
 
+START_TEST(parse_implied_field_with_dashes)
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user -John Smith-}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "-John Smith-");
+    user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user - John Smith -}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "- John Smith -");
+END_TEST
+
 static void
 check_parse_implied_field_max_size(int name_flags) {
     DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, name_flags), gen_sid_spec(&user, 0));
@@ -790,6 +806,21 @@ START_TEST(parse_tag)
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.name, user.name_size, "(none)");
+END_TEST
+
+START_TEST(parse_tag_with_dashes)
+    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, SPEC_NAME), gen_default_spec(&user));
+    struct gslTaskSpec specs[] = {
+        {  // Make an alias for user spec
+            .name = "u-s-e-r-", .name_size = strlen("u-s-e-r-"),
+            .parse = parse_user, .obj = &parse_user_args
+        },
+    };
+
+    rc = gsl_parse_task(rec = "{u-s-e-r- John Smith}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
 END_TEST
 
 START_TEST(parse_tag_unknown)
@@ -1076,6 +1107,43 @@ START_TEST(parse_value_named_with_spaces)
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
+  }
+END_TEST
+
+START_TEST(parse_value_named_with_dashes)
+    // Case #1: .buf  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_BUF));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid -2345-}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, "-2345-");
+    user.sid_size = 0;  // reset
+  }
+
+    // Case #2: .run  (terminal)
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_RUN));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid -2345-}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, "-2345-");
+    user.sid_size = 0;  // reset
+  }
+
+    // Case #3: .parse
+  {
+    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_PARSE));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {sid -2345-}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.sid, user.sid_size, "-2345-");
   }
 END_TEST
 
@@ -2481,6 +2549,7 @@ int main() {
     tcase_add_test(tc_get, parse_implied_field);
     tcase_add_test(tc_get, parse_implied_field_with_name);
     tcase_add_test(tc_get, parse_implied_field_with_spaces);
+    tcase_add_test(tc_get, parse_implied_field_with_dashes);
     tcase_add_test(tc_get, parse_implied_field_max_size);
     tcase_add_test(tc_get, parse_implied_field_max_size_plus_one);
     tcase_add_test(tc_get, parse_implied_field_size_NAME_SIZE_plus_one);
@@ -2490,6 +2559,7 @@ int main() {
     tcase_add_test(tc_get, parse_implied_field_with_braces);
     tcase_add_test(tc_get, parse_tag_empty);
     tcase_add_test(tc_get, parse_tag);
+    tcase_add_test(tc_get, parse_tag_with_dashes);
     tcase_add_test(tc_get, parse_tag_unknown);
     tcase_add_test(tc_get, parse_tag_with_leading_spaces);
     tcase_add_test(tc_get, parse_value);
@@ -2501,6 +2571,7 @@ int main() {
     tcase_add_test(tc_get, parse_value_named_empty);
     tcase_add_test(tc_get, parse_value_named);
     tcase_add_test(tc_get, parse_value_named_with_spaces);
+    tcase_add_test(tc_get, parse_value_named_with_dashes);
     tcase_add_test(tc_get, parse_value_named_max_size);
     tcase_add_test(tc_get, parse_value_named_max_size_plus_one);
     tcase_add_test(tc_get, parse_value_named_unknown);
