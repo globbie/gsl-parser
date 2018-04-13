@@ -622,8 +622,6 @@ gsl_err_t gsl_parse_task(const char *rec,
     gsl_err_t err;
 
     c = rec;
-    b = rec;
-    e = rec;
 
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("\n\n*** start basic PARSING: \"%.*s\" num specs: %zu [%p]",
@@ -642,6 +640,8 @@ gsl_err_t gsl_parse_task(const char *rec,
             if (!in_field) {
                 // Example: rec = "     {name...
                 //                 ^^^^^  -- ignore spaces
+                //      or: rec = "j smith {name...
+                //                  ^  -- keep spaces in implied field
                 break;
             }
             if (in_terminal) {
@@ -696,8 +696,6 @@ gsl_err_t gsl_parse_task(const char *rec,
             // in_tag == false
             // in_terminal == false
             c += chunk_size;
-            b = c;
-            e = b;
             break;
         case '{':
         case '(':
@@ -784,8 +782,6 @@ gsl_err_t gsl_parse_task(const char *rec,
             // in_tag == false
             // in_terminal == false
             c += chunk_size;
-            b = c;
-            e = b;
             break;
         case '}':
         case ')':
@@ -831,8 +827,6 @@ gsl_err_t gsl_parse_task(const char *rec,
                 // in_array == false
                 in_tag = false;
                 in_terminal = false;
-                b = c + 1;
-                e = b;
                 break;
             }
 
@@ -930,8 +924,6 @@ gsl_err_t gsl_parse_task(const char *rec,
                 // in_tag == false
                 // in_terminal == false
                 c += chunk_size;
-                b = c;
-                e = b;
                 break;
             }
 
