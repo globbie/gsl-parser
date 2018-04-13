@@ -925,18 +925,6 @@ START_TEST(parse_value_unmatched_braces)
 
     // Case #3: .parse
     check_parse_value_unmatched_braces(SPEC_PARSE);
-
-    // Case #4: change cases  // TODO(ki.stfu): move to GSL_SET_STATE cases
-  {
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_CHANGE));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-    rc = gsl_parse_task(rec = "{user (sid 123456}}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-
-    rc = gsl_parse_task(rec = "{user (sid 123456]}", &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_FORMAT);
-  }
 END_TEST
 
 START_TEST(parse_value_absent_braces)
