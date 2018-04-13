@@ -329,7 +329,7 @@ enum { SPEC_BUF = 0x0, SPEC_PARSE = 0x1, SPEC_RUN = 0x2, SPEC_NAME = 0x4, SPEC_S
 
 static struct gslTaskSpec gen_user_spec(struct TaskSpecs *args, int flags) {
     assert((flags & (SPEC_CHANGE)) == flags && "Valid flags: [SPEC_CHANGE]");
-    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
+    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_SET_STATE,
                                  .name = "user", .name_size = strlen("user"),
                                  .parse = parse_user, .obj = args };
 }
@@ -339,12 +339,12 @@ static struct gslTaskSpec gen_name_spec(struct User *self, int flags) {
            "Valid flags: [SPEC_BUF | SPEC_RUN] [SPEC_NAME] [SPEC_SELECTOR] [SPEC_CHANGE]");
     if (flags & SPEC_RUN)
         return (struct gslTaskSpec){ .is_implied = true,
-                                     .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
+                                     .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_SET_STATE,
                                      .name = (flags & SPEC_NAME) ? "name" : NULL, .name_size = (flags & SPEC_NAME) ? strlen("name") : 0,
                                      .is_selector = (flags & SPEC_SELECTOR),
                                      .run = run_set_name, .obj = self };
     return (struct gslTaskSpec){ .is_implied = true,
-                                 .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
+                                 .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_SET_STATE,
                                  .name = (flags & SPEC_NAME) ? "name" : NULL, .name_size = (flags & SPEC_NAME) ? strlen("name") : 0,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .buf = self->name, .buf_size = &self->name_size, .max_buf_size = sizeof self->name };
@@ -354,16 +354,16 @@ static struct gslTaskSpec gen_sid_spec(struct User *self, int flags) {
     assert((flags & (SPEC_BUF | SPEC_PARSE | SPEC_RUN | SPEC_SELECTOR | SPEC_CHANGE)) == flags &&
            "Valid flags: [SPEC_BUF | SPEC_PARSE | SPEC_RUN] [SPEC_SELECTOR] [SPEC_CHANGE]");
     if (flags & SPEC_PARSE)
-        return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
+        return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_SET_STATE,
                                      .name = "sid", .name_size = strlen("sid"),
                                      .is_selector = (flags & SPEC_SELECTOR),
                                      .parse = parse_sid, .obj = self };
     if (flags & SPEC_RUN)
-        return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
+        return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_SET_STATE,
                                      .name = "sid", .name_size = strlen("sid"),
                                      .is_selector = (flags & SPEC_SELECTOR),
                                      .run = run_set_sid, .obj = self };
-    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
+    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_SET_STATE,
                                  .name = "sid", .name_size = strlen("sid"),
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .buf = self->sid, .buf_size = &self->sid_size, .max_buf_size = sizeof self->sid };
@@ -372,7 +372,7 @@ static struct gslTaskSpec gen_sid_spec(struct User *self, int flags) {
 static struct gslTaskSpec gen_contacts_spec(struct User *self, int flags) {
     assert((flags & (SPEC_SELECTOR | SPEC_CHANGE)) == flags &&
            "Valid flags: [SPEC_SELECTOR] [SPEC_CHANGE]");
-    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
+    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_SET_STATE,
                                  .is_validator = true,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .validate = parse_contacts, .obj = self };
@@ -926,7 +926,7 @@ START_TEST(parse_value_unmatched_braces)
     // Case #3: .parse
     check_parse_value_unmatched_braces(SPEC_PARSE);
 
-    // Case #4: change cases  // TODO(ki.stfu): move to GSL_CHANGE_STATE cases
+    // Case #4: change cases  // TODO(ki.stfu): move to GSL_SET_STATE cases
   {
     DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
@@ -1614,7 +1614,7 @@ START_TEST(parse_comment_unmatched_braces)
 END_TEST
 
 // --------------------------------------------------------------------------------
-// GSL_CHANGE_STATE cases
+// GSL_SET_STATE cases
 
 static void
 check_parse_change_implied_field(struct gslTaskSpec *specs,
@@ -2098,7 +2098,7 @@ START_TEST(parse_change_comment_unmatched_braces)
 END_TEST
 
 // --------------------------------------------------------------------------------
-// Arrays
+// GSL_SET_ARRAY_STATE cases
 
 START_TEST(parse_array_tag_empty)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
@@ -2485,6 +2485,9 @@ END_TEST
 
 // --------------------------------------------------------------------------------
 // main
+
+// TODO(ki.stfu): Rename SPEC_CHANGE to SPEC_SET_STATE
+// TODO(ki.stfu): Rename parse_change_* to parse_set_*
 
 int main() {
     Suite* s = suite_create("suite");
