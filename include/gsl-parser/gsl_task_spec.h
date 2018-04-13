@@ -19,7 +19,6 @@ struct gslTaskSpec {
     bool is_implied;
     bool is_validator;
     bool is_list_item;
-    bool is_atomic;
 
     char *buf;
     size_t *buf_size;

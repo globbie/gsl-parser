@@ -136,16 +136,15 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     assert(!spec->is_completed);
 
     if (spec->is_default)
-        assert(!spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_list_item);
     if (spec->is_selector)
-        assert(!spec->is_default && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_default && !spec->is_list_item);
     if (spec->is_implied)
-        assert(!spec->is_default && !spec->is_validator && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_default && !spec->is_validator && !spec->is_list_item);
     if (spec->is_validator)
-        assert(!spec->is_default && !spec->is_implied && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_default && !spec->is_implied && !spec->is_list_item);
     if (spec->is_list_item)
-        assert(!spec->is_default && !spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_atomic);
-    assert(!spec->is_atomic);  // TODO(ki.stfu): ?? Remove this field
+        assert(!spec->is_default && !spec->is_selector && !spec->is_implied && !spec->is_validator);
 
     assert((spec->buf != NULL) == (spec->buf_size != NULL));
     assert((spec->buf != NULL) == (spec->max_buf_size != 0));
