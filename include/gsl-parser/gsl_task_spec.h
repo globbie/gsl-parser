@@ -5,11 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// TODO(ki.stfu): Delete this
-#define GSL_NAME_SIZE 512
-#define GSL_SHORT_NAME_SIZE 64
-
-typedef enum { GSL_GET_STATE, GSL_CHANGE_STATE } gsl_task_spec_type;
+typedef enum { GSL_GET_STATE, GSL_CHANGE_STATE, GSL_SET_ARRAY_STATE } gsl_task_spec_type;
 
 struct gslTaskSpec {
     gsl_task_spec_type type;
@@ -22,9 +18,7 @@ struct gslTaskSpec {
     bool is_selector;
     bool is_implied;
     bool is_validator;
-    bool is_list;  // TODO(ki.stfu): ?? code in gsl_task_spec_type
     bool is_list_item;
-    bool is_atomic;
 
     char *buf;
     size_t *buf_size;

@@ -5,17 +5,18 @@
 #include <assert.h>
 #include <string.h>
 
+#define USER_NAME_SIZE 64
 #define USER_GROUPS_MAX_SIZE 4  // Note: Don't modify! Some tests rely this is equal to 4.   // TODO(ki.stfu): really?
 
 // --------------------------------------------------------------------------------
 // User -- testable object
 struct User {
-    char name[GSL_SHORT_NAME_SIZE]; size_t name_size;
+    char name[USER_NAME_SIZE]; size_t name_size;
     char sid[6]; size_t sid_size;
-    char email[GSL_SHORT_NAME_SIZE]; size_t email_size;
-    char mobile[GSL_SHORT_NAME_SIZE]; size_t mobile_size;
-    struct Group { char gid[GSL_SHORT_NAME_SIZE]; size_t gid_size; } groups[USER_GROUPS_MAX_SIZE]; size_t num_groups;
-    struct Language { char lang[GSL_SHORT_NAME_SIZE]; size_t lang_size; } languages[1]; size_t num_languages;  // Pseudo array
+    char email[USER_NAME_SIZE]; size_t email_size;
+    char mobile[USER_NAME_SIZE]; size_t mobile_size;
+    struct Group { char gid[USER_NAME_SIZE]; size_t gid_size; } groups[USER_GROUPS_MAX_SIZE]; size_t num_groups;
+    struct Language { char lang[USER_NAME_SIZE]; size_t lang_size; } languages[1]; size_t num_languages;  // Pseudo array
 };
 
 // --------------------------------------------------------------------------------
@@ -393,16 +394,16 @@ static struct gslTaskSpec gen_groups_item_spec(struct User *self, int flags) {
 
 static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec* item_spec, int flags) {
     assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
-    return (struct gslTaskSpec){ .name = "groups", .name_size = strlen("groups"),
-                                 .is_list = true,
+    return (struct gslTaskSpec){ .type = GSL_SET_ARRAY_STATE,
+                                 .name = "groups", .name_size = strlen("groups"),
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .parse = gsl_parse_array, .obj = item_spec };
 }
 
 static struct gslTaskSpec gen_skills_spec(struct User *self, int flags) {
     assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
-    return (struct gslTaskSpec){ .is_validator = true,
-                                 .is_list = true,
+    return (struct gslTaskSpec){ .type = GSL_SET_ARRAY_STATE,
+                                 .is_validator = true,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .validate = parse_skills, .obj = self };
 }
@@ -588,30 +589,30 @@ check_parse_implied_field_max_size(int name_flags) {
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
   {
-    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 5] = 'a', '}', '\0' };
+    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 5] = 'a', '}', '\0' };
     rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), GSL_SHORT_NAME_SIZE);
+    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), USER_NAME_SIZE);
     user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
   }
 
   {
-    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 5] = 'a', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
+    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 5] = 'a', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
     rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), GSL_SHORT_NAME_SIZE);
+    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), USER_NAME_SIZE);
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
     user.name_size = 0; user.sid_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
   }
 
   {
-    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 5] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
+    const char input[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 5] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
     rc = gsl_parse_task(rec = input, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
-    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), GSL_SHORT_NAME_SIZE);
+    ASSERT_STR_EQ(user.name, user.name_size, strchr(input, 'a'), USER_NAME_SIZE);
     ASSERT_STR_EQ(user.sid, user.sid_size, "123456");
     user.name_size = 0; user.sid_size = 0;  // reset
   }
@@ -626,9 +627,9 @@ START_TEST(parse_implied_field_max_size)
 END_TEST
 
 START_TEST(parse_implied_field_max_size_plus_one)
-    const char input1[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 6] = 'a', '}', '\0' };
-    const char input2[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 6] = 'a', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
-    const char input3[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_SHORT_NAME_SIZE + 6] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
+    const char input1[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 6] = 'a', '}', '\0' };
+    const char input2[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 6] = 'a', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
+    const char input3[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... USER_NAME_SIZE + 6] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
 
     // Case #1: .buf
   {
@@ -659,31 +660,6 @@ START_TEST(parse_implied_field_max_size_plus_one)
     rc = gsl_parse_task(rec = input3, &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert(is_gsl_err_external(rc)); ck_assert_int_eq(gsl_err_external_to_ext_code(rc), gsl_LIMIT);
   }
-END_TEST
-
-static void
-check_parse_implied_field_size_NAME_SIZE_plus_one(int name_flags) {
-    DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, name_flags));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_NAME_SIZE + 6] = 'a', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', [6 ... GSL_NAME_SIZE + 6] = 'a', ' ', '{', 's', 'i', 'd', ' ', '1', '2', '3', '4', '5', '6', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-}
-
-// TODO(ki.stfu): ignore GSL_NAME_SIZE limit and remove this test case
-START_TEST(parse_implied_field_size_NAME_SIZE_plus_one)
-    check_parse_implied_field_size_NAME_SIZE_plus_one(SPEC_BUF);
-
-    check_parse_implied_field_size_NAME_SIZE_plus_one(SPEC_RUN);
 END_TEST
 
 START_TEST(parse_implied_field_unknown)
@@ -1304,33 +1280,6 @@ START_TEST(parse_value_named_with_braces)
     rc = gsl_parse_task(rec = "{user {sid 123{456}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_NO_MATCH);
   }
-END_TEST
-
-static void
-check_parse_value_terminal_NAME_SIZE_plus_one(int sid_flags) {
-    DEFINE_TaskSpecs(parse_user_args, gen_sid_spec(&user, sid_flags));
-    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', '{', 's', 'i', 'd', ' ', [10 ... GSL_NAME_SIZE + 10] = '1', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-
-  {
-    const char buf[] = { '{', 'u', 's', 'e', 'r', ' ', '{', 's', 'i', 'd', ' ', [11 ... GSL_NAME_SIZE + 11] = '1', '}', '}', '\0' };
-    rc = gsl_parse_task(rec = buf, &total_size, specs, sizeof specs / sizeof specs[0]);
-    ck_assert_int_eq(rc.code, gsl_LIMIT);
-  }
-}
-
-// TODO(ki.stfu): ignore GSL_NAME_SIZE limit and remove this test case
-START_TEST(parse_value_terminal_NAME_SIZE_plus_one)
-    check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_BUF);
-
-    check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_PARSE);
-
-    check_parse_value_terminal_NAME_SIZE_plus_one(SPEC_RUN);
 END_TEST
 
 START_TEST(parse_value_validate_empty)
@@ -2552,7 +2501,6 @@ int main() {
     tcase_add_test(tc_get, parse_implied_field_with_dashes);
     tcase_add_test(tc_get, parse_implied_field_max_size);
     tcase_add_test(tc_get, parse_implied_field_max_size_plus_one);
-    tcase_add_test(tc_get, parse_implied_field_size_NAME_SIZE_plus_one);
     tcase_add_test(tc_get, parse_implied_field_unknown);
     tcase_add_test(tc_get, parse_implied_field_duplicate);
     tcase_add_test(tc_get, parse_implied_field_not_first);
@@ -2577,7 +2525,6 @@ int main() {
     tcase_add_test(tc_get, parse_value_named_unknown);
     tcase_add_test(tc_get, parse_value_named_duplicate);
     tcase_add_test(tc_get, parse_value_named_with_braces);
-    tcase_add_test(tc_get, parse_value_terminal_NAME_SIZE_plus_one);
     tcase_add_test(tc_get, parse_value_validate_empty);
     tcase_add_test(tc_get, parse_value_validate);
     tcase_add_test(tc_get, parse_value_validate_unknown);

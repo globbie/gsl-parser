@@ -129,25 +129,22 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     // Check the fields are not mutually exclusive (by groups):
 
-    assert(spec->type == GSL_GET_STATE || spec->type == GSL_CHANGE_STATE);
+    assert(spec->type == GSL_GET_STATE || spec->type == GSL_CHANGE_STATE || spec->type == GSL_SET_ARRAY_STATE);
 
     assert((spec->name != NULL) == (spec->name_size != 0));
 
     assert(!spec->is_completed);
 
     if (spec->is_default)
-        assert(!spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_list && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_list_item);
     if (spec->is_selector)
-        assert(!spec->is_default && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_default && !spec->is_list_item);
     if (spec->is_implied)
-        assert(!spec->is_default && !spec->is_validator && !spec->is_list && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_default && !spec->is_validator && !spec->is_list_item);
     if (spec->is_validator)
-        assert(!spec->is_default && !spec->is_implied && !spec->is_list_item && !spec->is_atomic);
-    if (spec->is_list)
-        assert(!spec->is_default && !spec->is_implied && !spec->is_list_item && !spec->is_atomic);
+        assert(!spec->is_default && !spec->is_implied && !spec->is_list_item);
     if (spec->is_list_item)
-        assert(!spec->is_default && !spec->is_selector && !spec->is_implied && !spec->is_validator && !spec->is_list && !spec->is_atomic);
-    assert(!spec->is_atomic);  // TODO(ki.stfu): ?? Remove this field
+        assert(!spec->is_default && !spec->is_selector && !spec->is_implied && !spec->is_validator);
 
     assert((spec->buf != NULL) == (spec->buf_size != NULL));
     assert((spec->buf != NULL) == (spec->max_buf_size != 0));
@@ -173,9 +170,14 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     // Check that they are not mutually exclusive (in general):
 
-    if (spec->type) {
-        assert(!spec->is_default && (!spec->is_implied || spec->name != NULL) && !spec->is_list && !spec->is_list_item);
+    if (spec->type == GSL_CHANGE_STATE) {
+        assert(!spec->is_default && (!spec->is_implied || spec->name != NULL) && !spec->is_list_item);
         // ?? assert(spec->name != NULL);
+    } else if (spec->type == GSL_SET_ARRAY_STATE) {
+        assert(!spec->is_default && !spec->is_implied && !spec->is_list_item);
+        assert(spec->name != NULL || spec->is_validator);
+        assert(spec->obj != NULL);
+        assert(spec->parse != NULL || spec->validate != NULL);
     }
 
     if (spec->name) {
@@ -204,13 +206,6 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
         assert(spec->validate != NULL);
     }
 
-    if (spec->is_list) {
-        assert(spec->type == 0);  // type is useless for lists
-        assert(spec->name != NULL || spec->is_validator);
-        assert(spec->obj != NULL);
-        assert(spec->parse != NULL || spec->validate != NULL);
-    }
-
     if (spec->is_list_item) {
         assert(spec->type == 0);  // type is useless for list items
         assert(spec->name == NULL);
@@ -223,7 +218,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     if (spec->buf) {
         // |spec->type| can be set (depends on |spec->name|)
-        assert(!spec->is_default && !spec->is_validator && !spec->is_list && !spec->is_list_item);
+        assert(!spec->is_default && !spec->is_validator && !spec->is_list_item);
         assert(spec->name != NULL || spec->is_implied);
         assert(spec->obj == NULL && spec->accu == NULL);
     }
@@ -240,7 +235,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     if (spec->run) {
         // |spec->type| can be set (depends on |spec->name|)
-        assert(!spec->is_validator && !spec->is_list && !spec->is_list_item);
+        assert(!spec->is_validator && !spec->is_list_item);
         assert(spec->name != NULL || spec->is_default || spec->is_implied);
         assert(spec->obj != NULL);
     }
@@ -322,7 +317,6 @@ static gsl_err_t
 gsl_find_spec(const char *name,
               size_t name_size,
               gsl_task_spec_type spec_type,
-              bool spec_type_list,
               struct gslTaskSpec *specs,
               size_t num_specs,
               struct gslTaskSpec **out_spec)
@@ -334,7 +328,6 @@ gsl_find_spec(const char *name,
         spec = &specs[i];
 
         if (spec->type != spec_type) continue;
-        if (spec->is_list != spec_type_list) continue;
 
         if (spec->is_validator) {
             assert(validator_spec == NULL && "validator_spec was already specified");
@@ -398,7 +391,6 @@ gsl_check_implied_field(const char *val, size_t val_size,
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("++ got implied val: \"%.*s\" [%zu]",
                 val_size, val, val_size);
-    if (val_size > GSL_NAME_SIZE) return make_gsl_err(gsl_LIMIT);
 
     for (size_t i = 0; i < num_specs; i++) {
         spec = &specs[i];
@@ -443,7 +435,6 @@ static gsl_err_t
 gsl_check_field_tag(const char *name,
                     size_t name_size,
                     gsl_task_spec_type type,
-                    bool spec_type_list,
                     struct gslTaskSpec *specs,
                     size_t num_specs,
                     struct gslTaskSpec **out_spec)
@@ -454,17 +445,12 @@ gsl_check_field_tag(const char *name,
         gsl_log("-- empty field tag?");
         return make_gsl_err(gsl_FORMAT);
     }
-    if (name_size > GSL_NAME_SIZE) {
-        gsl_log("-- field tag too large: %zu bytes: \"%.*s\"",
-                name_size, name_size, name);
-        return make_gsl_err(gsl_LIMIT);
-    }
 
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("++ BASIC LOOP got tag after brace: \"%.*s\" [%zu]",
                 name_size, name, name_size);
 
-    err = gsl_find_spec(name, name_size, type, spec_type_list, specs, num_specs, out_spec);
+    err = gsl_find_spec(name, name_size, type, specs, num_specs, out_spec);
     if (err.code) {
         gsl_log("-- no spec found to handle the \"%.*s\" tag: %d",
                 name_size, name, err);
@@ -535,12 +521,6 @@ gsl_check_field_terminal_value(const char *val, size_t val_size,
                                struct gslTaskSpec *spec)
 {
     gsl_err_t err;
-
-    if (val_size > GSL_NAME_SIZE) {
-        gsl_log("-- value too large: %zu bytes: \"%.*s\"",
-                val_size, val_size, val);
-        return make_gsl_err(gsl_LIMIT);
-    }
 
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("++ got terminal val: \"%.*s\" [%zu]",
@@ -748,7 +728,7 @@ gsl_err_t gsl_parse_task(const char *rec,
 
     bool in_implied_field = false;
     bool in_field = false;
-    bool in_change = false;
+    bool in_change = false;  // TODO(ki.stfu): replace with gsl_task_spec_type
     bool in_array = false;
     bool in_tag = false;
     bool in_terminal = false;
@@ -757,8 +737,6 @@ gsl_err_t gsl_parse_task(const char *rec,
     gsl_err_t err;
 
     c = rec;
-    b = rec;
-    e = rec;
 
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("\n\n*** start basic PARSING: \"%.*s\" num specs: %zu [%p]",
@@ -777,11 +755,21 @@ gsl_err_t gsl_parse_task(const char *rec,
             if (!in_field) {
                 // Example: rec = "     {name...
                 //                 ^^^^^  -- ignore spaces
+                //      or: rec = "j smith  {name...
+                //                  ^     ^^  -- keep spaces in implied field, and ignore them after it
                 break;
             }
             if (in_terminal) {
-                // Example: rec = "{name John Smith...
-                //                           ^  -- keep spaces in terminal value
+                // Example: rec = "{name   John Smith...
+                //                       ^^    ^  -- keep spaces in terminal value, and ignore them before it
+
+                if (b == c) {
+                    // Example: rec = "{name   John Smith...
+                    //                       ^^  -- ignore spaces
+                    b = c + 1;
+                    e = b;
+                }
+
                 break;
             }
 
@@ -792,10 +780,8 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "{name ...
             //                      ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, in_array, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_STATE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
             if (err.code) return err;
-
-            if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);
             if (err.code) return err;
@@ -831,8 +817,6 @@ gsl_err_t gsl_parse_task(const char *rec,
             // in_tag == false
             // in_terminal == false
             c += chunk_size;
-            b = c;
-            e = b;
             break;
         case '{':
         case '(':
@@ -884,10 +868,8 @@ gsl_err_t gsl_parse_task(const char *rec,
             //      or: rec = "[groups{...
             //                        ^  -- same way
 
-            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, in_array, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_STATE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
             if (err.code) return err;
-
-            if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);
             if (err.code) return err;
@@ -919,8 +901,6 @@ gsl_err_t gsl_parse_task(const char *rec,
             // in_tag == false
             // in_terminal == false
             c += chunk_size;
-            b = c;
-            e = b;
             break;
         case '}':
         case ')':
@@ -966,8 +946,6 @@ gsl_err_t gsl_parse_task(const char *rec,
                 // in_array == false
                 in_tag = false;
                 in_terminal = false;
-                b = c + 1;
-                e = b;
                 break;
             }
 
@@ -975,10 +953,8 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "{name}"
             //                      ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, in_array, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_STATE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
             if (err.code) return err;
-
-            if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(ki.stfu): allow in_terminal parsing
             if (err.code) return err;
@@ -1035,10 +1011,8 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "[groups]"
             //                        ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, !in_change ? GSL_GET_STATE : GSL_CHANGE_STATE, in_array, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_STATE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
             if (err.code) return err;
-
-            if (in_array != spec->is_list) return make_gsl_err(gsl_NO_MATCH);
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(ki.stfu): allow in_terminal parsing
             if (err.code) return err;
@@ -1065,8 +1039,6 @@ gsl_err_t gsl_parse_task(const char *rec,
                 // in_tag == false
                 // in_terminal == false
                 c += chunk_size;
-                b = c;
-                e = b;
                 break;
             }
 
