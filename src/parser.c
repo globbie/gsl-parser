@@ -770,29 +770,6 @@ gsl_err_t gsl_parse_task(const char *rec,
 
     while (*c) {
         switch (*c) {
-        case '-':
-            // FIXME(ki.stfu): fix these conditions
-            if (!in_field) {
-                e = c + 1;
-                break;
-            }
-            if (in_tag) {
-                e = c + 1;
-                break;
-            }
-
-            err = gsl_parse_matching_braces(c, in_change, in_array, &chunk_size);
-            if (err.code) return err;
-
-            in_field = false;
-            in_change = false;
-            in_array = false;
-            // in_tag == false
-            // in_terminal == false
-            c += chunk_size;
-            b = c;
-            e = b;
-            break;
         case '\n':
         case '\r':
         case '\t':
@@ -1075,14 +1052,39 @@ gsl_err_t gsl_parse_task(const char *rec,
             // in_tag == false
             // in_terminal == false
             break;
-        default:
-            e = c + 1;
-            if (!in_field) {
-                if (!in_implied_field) {
-                    b = c;
-                    in_implied_field = true;
-                }
+        case '-':
+            if (in_field && !in_tag && b == c) {
+                // Example: rec = "...{-name John Smith}}"
+                //                     ^  -- ignore the commented out field
+                err = gsl_parse_matching_braces(c, in_change, in_array, &chunk_size);
+                if (err.code) return err;
+
+                in_field = false;
+                in_change = false;
+                in_array = false;
+                // in_tag == false
+                // in_terminal == false
+                c += chunk_size;
+                b = c;
+                e = b;
+                break;
             }
+
+            // FALLTHROUGH
+        default:
+            // Example: rec = " <ch> jsmith {name John Smith}}"
+            //                  ^^^^ ^^^^^^  ^^^^ ^^^^ ^^^^^  -- handle all non-special characters
+
+            if (!in_field && !in_implied_field) {
+                // Example: rec = " <ch>  jsmith {name John Smith}}"
+                //                  ^^^^  -- start recording an implied field
+                b = c;
+                in_implied_field = true;
+            }
+
+            // Example: rec = " <ch> jsmith {name John Smith}}"
+            //                  ^^^^ ^^^^^^  ^^^^ ^^^^ ^^^^^  -- move the end pointer
+            e = c + 1;
             break;
         }
         c++;
