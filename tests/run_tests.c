@@ -329,7 +329,7 @@ enum { SPEC_BUF = 0x0, SPEC_PARSE = 0x1, SPEC_RUN = 0x2, SPEC_NAME = 0x4, SPEC_S
 
 static struct gslTaskSpec gen_user_spec(struct TaskSpecs *args, int flags) {
     assert((flags & (SPEC_CHANGE)) == flags && "Valid flags: [SPEC_CHANGE]");
-    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_TYPE : GSL_CHANGE_STATE,
+    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
                                  .name = "user", .name_size = strlen("user"),
                                  .parse = parse_user, .obj = args };
 }
@@ -339,12 +339,12 @@ static struct gslTaskSpec gen_name_spec(struct User *self, int flags) {
            "Valid flags: [SPEC_BUF | SPEC_RUN] [SPEC_NAME] [SPEC_SELECTOR] [SPEC_CHANGE]");
     if (flags & SPEC_RUN)
         return (struct gslTaskSpec){ .is_implied = true,
-                                     .type = !(flags & SPEC_CHANGE) ? GSL_GET_TYPE : GSL_CHANGE_STATE,
+                                     .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
                                      .name = (flags & SPEC_NAME) ? "name" : NULL, .name_size = (flags & SPEC_NAME) ? strlen("name") : 0,
                                      .is_selector = (flags & SPEC_SELECTOR),
                                      .run = run_set_name, .obj = self };
     return (struct gslTaskSpec){ .is_implied = true,
-                                 .type = !(flags & SPEC_CHANGE) ? GSL_GET_TYPE : GSL_CHANGE_STATE,
+                                 .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
                                  .name = (flags & SPEC_NAME) ? "name" : NULL, .name_size = (flags & SPEC_NAME) ? strlen("name") : 0,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .buf = self->name, .buf_size = &self->name_size, .max_buf_size = sizeof self->name };
@@ -354,16 +354,16 @@ static struct gslTaskSpec gen_sid_spec(struct User *self, int flags) {
     assert((flags & (SPEC_BUF | SPEC_PARSE | SPEC_RUN | SPEC_SELECTOR | SPEC_CHANGE)) == flags &&
            "Valid flags: [SPEC_BUF | SPEC_PARSE | SPEC_RUN] [SPEC_SELECTOR] [SPEC_CHANGE]");
     if (flags & SPEC_PARSE)
-        return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_TYPE : GSL_CHANGE_STATE,
+        return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
                                      .name = "sid", .name_size = strlen("sid"),
                                      .is_selector = (flags & SPEC_SELECTOR),
                                      .parse = parse_sid, .obj = self };
     if (flags & SPEC_RUN)
-        return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_TYPE : GSL_CHANGE_STATE,
+        return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
                                      .name = "sid", .name_size = strlen("sid"),
                                      .is_selector = (flags & SPEC_SELECTOR),
                                      .run = run_set_sid, .obj = self };
-    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_TYPE : GSL_CHANGE_STATE,
+    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
                                  .name = "sid", .name_size = strlen("sid"),
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .buf = self->sid, .buf_size = &self->sid_size, .max_buf_size = sizeof self->sid };
@@ -372,7 +372,7 @@ static struct gslTaskSpec gen_sid_spec(struct User *self, int flags) {
 static struct gslTaskSpec gen_contacts_spec(struct User *self, int flags) {
     assert((flags & (SPEC_SELECTOR | SPEC_CHANGE)) == flags &&
            "Valid flags: [SPEC_SELECTOR] [SPEC_CHANGE]");
-    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_TYPE : GSL_CHANGE_STATE,
+    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_CHANGE_STATE,
                                  .is_validator = true,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .validate = parse_contacts, .obj = self };
@@ -416,7 +416,7 @@ size_t total_size;
 struct User user;
 
 // --------------------------------------------------------------------------------
-// GSL_GET_TYPE cases
+// GSL_GET_STATE cases
 
 START_TEST(parse_task_empty)
     DEFINE_TaskSpecs(parse_user_args, gen_name_spec(&user, 0), gen_sid_spec(&user, 0));

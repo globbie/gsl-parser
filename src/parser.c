@@ -129,7 +129,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     // Check the fields are not mutually exclusive (by groups):
 
-    assert(spec->type == GSL_GET_TYPE || spec->type == GSL_CHANGE_STATE || spec->type == GSL_SET_ARRAY_STATE);
+    assert(spec->type == GSL_GET_STATE || spec->type == GSL_CHANGE_STATE || spec->type == GSL_SET_ARRAY_STATE);
 
     assert((spec->name != NULL) == (spec->name_size != 0));
 
@@ -344,7 +344,7 @@ gsl_find_spec(const char *name,
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("-- no named spec found for \"%.*s\" of type %s  validator: %p",
                 name_size, name,
-                spec_type == GSL_GET_TYPE ? "GET" : "CHANGE",
+                spec_type == GSL_GET_STATE ? "GET" : "CHANGE",
                 validator_spec);
 
     if (validator_spec) {
@@ -645,7 +645,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "{name ...
             //                      ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_TYPE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_STATE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
             if (err.code) return err;
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);
@@ -733,7 +733,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             //      or: rec = "[groups{...
             //                        ^  -- same way
 
-            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_TYPE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_STATE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
             if (err.code) return err;
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);
@@ -818,7 +818,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "{name}"
             //                      ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_TYPE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_STATE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
             if (err.code) return err;
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(ki.stfu): allow in_terminal parsing
@@ -876,7 +876,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             // Example: rec = "[groups]"
             //                        ^  -- handle a tag
 
-            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_TYPE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
+            err = gsl_check_field_tag(b, e - b, in_change ? GSL_CHANGE_STATE : !in_array ? GSL_GET_STATE : GSL_SET_ARRAY_STATE, specs, num_specs, &spec);
             if (err.code) return err;
 
             err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(ki.stfu): allow in_terminal parsing
@@ -942,7 +942,7 @@ gsl_parse_array(void *obj,
 {
     struct gslTaskSpec *spec = (struct gslTaskSpec *)obj;
 
-    assert(spec->type == GSL_GET_TYPE);
+    assert(spec->type == GSL_GET_STATE);
     assert(spec->name == NULL);
     assert(spec->name == NULL && gsl_spec_is_correct(spec));
 
