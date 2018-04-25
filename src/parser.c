@@ -981,6 +981,9 @@ gsl_parse_array(void *obj,
             err = spec->alloc(spec->accu, b, e - b, item_count, &item);
             if (err.code) return err;
 
+            err = spec->append(spec->accu, item);
+            if (err.code) return err;
+
             in_item = false;
             item_count++;
             b = c + 1;
@@ -1033,6 +1036,9 @@ gsl_parse_array(void *obj,
 
                 err = spec->alloc(spec->accu, b, e - b, item_count, &item);
                 if (err.code) return err;
+
+                err = spec->append(spec->accu, item);
+		if (err.code) return err;
 
                 in_item = false;
                 item_count++;
