@@ -18,9 +18,11 @@ set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3 -Werror")
 
 include_directories(include)
 
-set(SOURCES src/parser.c include/gsl-parser.h)
+set(HEADERS include/gsl-parser.h include/gsl-parser/config.h include/gsl-parser/gsl_err.h
+        include/gsl-parser/gsl_log.h include/gsl-parser/gsl_task_spec.h)
+set(SOURCES src/parser.c)
 
-add_library(${PROJECT_NAME}_obj OBJECT ${SOURCES})
+add_library(${PROJECT_NAME}_obj OBJECT ${HEADERS} ${SOURCES})
 add_library(${PROJECT_NAME}_static STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_obj>)
 
 add_subdirectory(tests)
