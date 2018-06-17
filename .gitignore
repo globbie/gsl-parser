@@ -1,0 +1,15 @@
+/build
+/cmake-build-debug
+
+*.tmp
+*.bak
+*.swp
+*~
+
+*.autosave
+*.idea
+delenda
+
+tags
+cscope.out
+cscope.files
