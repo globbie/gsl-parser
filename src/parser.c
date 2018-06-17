@@ -368,7 +368,7 @@ gsl_check_matching_closing_brace(const char *c, gsl_task_spec_type in_field_type
         if (in_field_type == GSL_SET_ARRAY_STATE) return make_gsl_err(gsl_OK);
         break;
     default:
-        assert("no closing brace found");
+        assert(0 && "no closing brace found");
     }
 
     gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
