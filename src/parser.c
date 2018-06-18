@@ -359,20 +359,19 @@ gsl_check_matching_closing_brace(const char *c, gsl_task_spec_type in_field_type
 {
     switch (*c) {
     case '}':
-        if (in_field_type == GSL_GET_STATE) return make_gsl_err(gsl_OK);
-        break;
-    case ')':
-        if (in_field_type == GSL_SET_STATE) return make_gsl_err(gsl_OK);
+        if (in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE)
+            return make_gsl_err(gsl_OK);
         break;
     case ']':
-        if (in_field_type == GSL_SET_ARRAY_STATE) return make_gsl_err(gsl_OK);
+        if (in_field_type == GSL_GET_ARRAY_STATE || in_field_type == GSL_SET_ARRAY_STATE)
+            return make_gsl_err(gsl_OK);
         break;
     default:
         assert(0 && "no closing brace found");
     }
 
     gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
-            (in_field_type == GSL_GET_STATE ? '}' : in_field_type == GSL_SET_STATE ? ')' : ']'), 16, c);
+            (in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']'), 16, c);
     return make_gsl_err(gsl_FORMAT);
 }
 
@@ -614,6 +613,37 @@ gsl_err_t gsl_parse_task(const char *rec,
 
     while (*c) {
         switch (*c) {
+        case '!':
+            if (!in_field) {
+                // Example: rec = "!! {name...
+                //                 ^^  -- keep exclamation marks in implied field
+                //      or: rec = "j smith! {name...
+                //                        ^  -- same way
+                goto default_case;
+            }
+            if (in_terminal) {
+                // Example: rec = "{name John! Smith...
+                //                           ^  -- keep exclamation marks in terminal value
+                goto default_case;
+            }
+
+            // Exclamation mark before a tag means switching to GSL_SET_STATE / GSL_SET_ARRAY_STATE.
+
+            if (b != c) {
+                // Example: rec = "{n!ame John Smith...
+                //                   ^  -- exclamation marks cannot be used in tag
+                goto default_case;
+            }
+
+            // Example: rec = "{!name John Smith...
+            //                  ^  -- switch to set state
+            // in_field = true
+            in_field_type = in_field_type == GSL_GET_STATE ? GSL_SET_STATE : GSL_SET_ARRAY_STATE;
+            // in_tag == false
+            // in_terminal == false
+            b = c + 1;
+            e = b;
+            break;
         case '\n':
         case '\r':
         case '\t':
@@ -627,7 +657,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             }
             if (in_terminal) {
                 // Example: rec = "{name   John Smith...
-                //                       ^^    ^  -- keep spaces in terminal value, and ignore them before it
+                //                       ^^    ^  -- keep spaces in terminal value, and ignore them before/after it
 
                 if (b == c) {
                     // Example: rec = "{name   John Smith...
@@ -683,18 +713,17 @@ gsl_err_t gsl_parse_task(const char *rec,
             c += chunk_size;
             break;
         case '{':
-        case '(':
         case '[':
-            // Starting brace '{' or '(' or '['
+            // Starting brace '{' or '['.
             if (!in_field) {
                 // Example: rec = "...{name John Smith}"
                 //                    ^  -- parse a new field
-                //      or: rec = "...[groups jsmith...]"
+                //      or: rec = "...[!groups jsmith...]"
                 //                    ^  -- same way
                 if (in_implied_field) {
                     // Example: rec = "jsmith {name John Smith}"
                     //                 ^^^^^^  -- but first let's handle an implied field which is pointed by |b| & |e|
-                    //      or: rec = "jsmith [groups jsmith...]"
+                    //      or: rec = "jsmith [!groups jsmith...]"
                     //                 ^^^^^^  -- same way
                     err = gsl_check_implied_field(b, e - b, specs, num_specs);
                     if (err.code) return err;
@@ -703,7 +732,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 }
 
                 in_field = true;
-                in_field_type = *c == '{' ? GSL_GET_STATE : *c == '(' ? GSL_SET_STATE : GSL_SET_ARRAY_STATE;
+                in_field_type = *c == '{' ? GSL_GET_STATE : GSL_GET_ARRAY_STATE;
                 // in_tag == false
                 // in_terminal == false
                 b = c + 1;
@@ -719,11 +748,11 @@ gsl_err_t gsl_parse_task(const char *rec,
                 //      or: rec = "{name John [Smith]}"
                 //                            ^  -- same way
                 gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '%c': %.*s",
-                        spec->name_size, spec->name, (in_field_type == GSL_GET_STATE ? '{' : in_field_type == GSL_SET_STATE ? '(' : '['), c - b + 16, b);
+                        spec->name_size, spec->name, *c, c - b + 16, b);
                 return make_gsl_err(gsl_FORMAT);
             }
 
-            // Parse a tag after an inner field brace '{' or '('.  Means in_tag can be set to true.
+            // Parse a tag after an inner field brace '{' or '['.  Means in_tag can be set to true.
             // Example: rec = "{name{...
             //                      ^  -- handle a tag
             //      or: rec = "{name[...
@@ -743,7 +772,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 // Example: rec = "{name[John Smith]}"
                 //                      ^  -- same way
                 gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '%c': %.*s",
-                        spec->name_size, spec->name, (in_field_type == GSL_GET_STATE ? '{' : in_field_type == GSL_SET_STATE ? '(' : '['), c - b + 16, b);
+                        spec->name_size, spec->name, *c, c - b + 16, b);
                 return make_gsl_err(gsl_FORMAT);
             }
             // else {
@@ -765,8 +794,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             c += chunk_size;
             break;
         case '}':
-        case ')':
-            // Closing brace '}' or ')'
+            // Closing brace '}'.
             if (!in_field) {
                 // Example: rec = "... }"
                 //                     ^  -- end of parsing
@@ -810,7 +838,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 break;
             }
 
-            // Parse a tag after a closing brace '}' / ')' in a field.  Means in_tag can be set to true.
+            // Parse a tag after a closing brace '}' in a field.  Means in_tag can be set to true.
             // Example: rec = "{name}"
             //                      ^  -- handle a tag
 
@@ -901,6 +929,7 @@ gsl_err_t gsl_parse_task(const char *rec,
 
             // FALLTHROUGH
         default:
+default_case:
             // Example: rec = " <ch> jsmith {name John Smith}}"
             //                  ^^^^ ^^^^^^  ^^^^ ^^^^ ^^^^^  -- handle all non-special characters
 
@@ -955,9 +984,7 @@ gsl_parse_array(void *obj,
     while (*c) {
         switch (*c) {
         case '-':
-        case '(':
         case '}':
-        case ')':
         case '[':
             return make_gsl_err(gsl_FORMAT);
         case '\n':
