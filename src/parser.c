@@ -22,30 +22,31 @@
 #define DEBUG_PARSER_LEVEL_TMP 1
 
 static gsl_err_t
-gsl_parse_matching_braces(const char *c,
-                          gsl_task_spec_type in_field_type,
-                          size_t *chunk_size)
+gsl_parse_comment(const char *c,
+                  gsl_task_spec_type in_field_type,
+                  size_t *chunk_size)
 {
-    const char *b = c;
-    size_t brace_count = 1;
+    const char * const b = c;
+    const char close_brace = in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']';
 
-    const char open_brace = in_field_type == GSL_GET_STATE ? '{' : in_field_type == GSL_SET_STATE ? '(' : '[';
-    const char close_brace = in_field_type == GSL_GET_STATE ? '}' : in_field_type == GSL_SET_STATE ? ')' : ']';
+    size_t dash_count = 0;
+    for (; *c == '-'; c++)
+        dash_count++;
 
     for (; *c; c++) {
-        if (*c == open_brace)
-            brace_count++;
-        else if (*c == close_brace) {
-            brace_count--;
-            if (!brace_count) {
-                *chunk_size = c - b;
-                return make_gsl_err(gsl_OK);
-            }
+        if (*c != '-') continue;
+
+        size_t dash_left = dash_count;
+        do dash_left--; while (*++c == '-');
+        if (*c == '\0') break;
+        else if (*c == close_brace && dash_left == 0) {
+            *chunk_size = c - b;
+            return make_gsl_err(gsl_OK);
         }
     }
 
-    gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
-            close_brace, 16, b);
+    gsl_log("-- no matching closing sequence -%zutimes%c found: \"%.*s\"",
+            dash_count, close_brace, 16, b);
     return make_gsl_err(gsl_FORMAT);
 }
 
@@ -919,7 +920,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             if (in_field && !in_tag && b == c) {
                 // Example: rec = "...{-name John Smith}}"
                 //                     ^  -- ignore the commented out field
-                err = gsl_parse_matching_braces(c, in_field_type, &chunk_size);
+                err = gsl_parse_comment(c, in_field_type, &chunk_size);
                 if (err.code) return err;
 
                 in_field = false;
