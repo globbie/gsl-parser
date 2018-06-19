@@ -66,7 +66,7 @@ gsl_run_set_size_t(void *obj,
     }
 
     errno = 0;
-    num = strtoull(val, &num_end, GSL_NUM_ENCODE_BASE);  // FIXME(ki.stfu): Null-terminated string is expected
+    num = strtoull(val, &num_end, GSL_NUM_ENCODE_BASE);  // FIXME(k15tfu): Null-terminated string is expected
     if (errno == ERANGE && num == ULLONG_MAX) {
         gsl_log("-- num limit reached: %.*s max: %llu",
                 (int)val_size, val, ULLONG_MAX);
@@ -150,7 +150,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     if (spec->buf)
         assert(*spec->buf_size == 0);
 
-    // TODO(ki.stfu): ?? assert(spec->accu == NULL);  // TODO(ki.stfu): ?? remove this field
+    // TODO(k15tfu): ?? assert(spec->accu == NULL);  // TODO(k15tfu): ?? remove this field
     if (spec->accu)
         assert(spec->obj == NULL);
     if (spec->obj)
@@ -368,6 +368,9 @@ gsl_check_matching_closing_brace(const char *c, gsl_task_spec_type in_field_type
         break;
     default:
         assert(0 && "no closing brace found");
+    case '\0': // TODO(k15tfu): remove this case and return gsl_FORMAT at the end of gsl_parse_task()
+        // Avoid an assert() for \0 symbol.
+        break;
     }
 
     gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
@@ -845,7 +848,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             err = gsl_check_field_tag(b, e - b, in_field_type, specs, num_specs, &spec);
             if (err.code) return err;
 
-            err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(ki.stfu): allow in_terminal parsing
+            err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(k15tfu): allow in_terminal parsing
             if (err.code) return err;
 
             if (in_terminal) {
@@ -901,7 +904,7 @@ gsl_err_t gsl_parse_task(const char *rec,
             err = gsl_check_field_tag(b, e - b, in_field_type, specs, num_specs, &spec);
             if (err.code) return err;
 
-            err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(ki.stfu): allow in_terminal parsing
+            err = gsl_parse_field_value(b, e - b, spec, c, &chunk_size, &in_terminal);  // TODO(k15tfu): allow in_terminal parsing
             if (err.code) return err;
 
             // terminal value is not used with lists
