@@ -635,7 +635,7 @@ gsl_err_t gsl_parse_task(const char *rec,
 
             if (b != c) {
                 // Example: rec = "{n!ame John Smith...
-                //                   ^  -- exclamation marks cannot be used in tag
+                //                   ^  -- nothing interesting, go to default case
                 goto default_case;
             }
 
