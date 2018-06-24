@@ -1092,3 +1092,82 @@ gsl_parse_array(void *obj,
 
     return make_gsl_err(gsl_FORMAT);
 }
+
+static bool
+gsl_check_floating_boundary(char bound, size_t bound_size,
+                            const char *rec,
+                            size_t *total_size)
+{
+    assert(*rec == bound && bound_size != 0);
+
+    const char *c = rec;
+    do {
+        c++, bound_size--;
+    } while (bound_size != 0 && *c == bound);
+
+    *total_size = c - rec;
+    return bound_size == 0;
+}
+
+gsl_err_t
+gsl_parse_cdata(void *obj,
+                const char *rec,
+                size_t *total_size)
+{
+    struct gslTaskSpec *spec = (struct gslTaskSpec *)obj;
+
+    assert(spec->type == GSL_GET_STATE || spec->type == GSL_SET_STATE);
+    assert(spec->buf != NULL || spec->run != NULL);
+    assert(gsl_spec_is_correct(spec));
+
+    bool in_cdata = false;
+    size_t num_quotes = 0;
+
+    size_t chunk_size;
+    gsl_err_t err;
+
+    const char *b, *c, *e;
+    for (c = rec; *c; c++) {
+        switch (*c) {
+        case '\n':
+        case '\r':
+        case '\t':
+        case ' ':
+            // Ignore all spaces
+            break;
+        case '"':
+            if (!in_cdata) {
+                num_quotes++;
+                break;
+            }
+
+            err.code = !gsl_check_floating_boundary('"', num_quotes, c, &chunk_size);
+            if (err.code) {
+                // We found something interesting at |c + chunk_size|.  Skip |chunk_size - 1| elements.
+                c += chunk_size - 1;
+                break;
+            }
+
+            err = gsl_check_matching_closing_brace(c + chunk_size, GSL_GET_STATE);
+            if (err.code) return err;
+
+            err = gsl_check_field_terminal_value(b, e - b, spec);
+            if (err.code) return err;
+
+            // in_cdata = false;
+            c += chunk_size;
+
+            *total_size = c - rec;
+            return make_gsl_err(gsl_OK);
+        default:
+            e = c + 1;
+            if (!in_cdata) {
+                b = c;
+                in_cdata = true;
+            }
+            break;
+        }
+    }
+
+    return make_gsl_err(gsl_FORMAT);
+}
