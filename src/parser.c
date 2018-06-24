@@ -21,33 +21,21 @@
 #define DEBUG_PARSER_LEVEL_4 0
 #define DEBUG_PARSER_LEVEL_TMP 1
 
-static gsl_err_t
-gsl_parse_comment(const char *c,
-                  gsl_task_spec_type in_field_type,
-                  size_t *chunk_size)
+static bool
+gsl_check_floating_boundary(char repeatee, size_t count,
+                            char end_marker,
+                            const char *rec,
+                            size_t *total_size)
 {
-    const char * const b = c;
-    const char close_brace = in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']';
+    assert(*rec == repeatee && count != 0);
 
-    size_t dash_count = 0;
-    for (; *c == '-'; c++)
-        dash_count++;
+    const char *c = rec;
+    do {
+        c++;
+    } while (*c == repeatee);
 
-    for (; *c; c++) {
-        if (*c != '-') continue;
-
-        size_t dash_left = dash_count;
-        do dash_left--; while (*++c == '-');
-        if (*c == '\0') break;
-        else if (*c == close_brace && dash_left == 0) {
-            *chunk_size = c - b;
-            return make_gsl_err(gsl_OK);
-        }
-    }
-
-    gsl_log("-- no matching closing sequence -%zutimes%c found: \"%.*s\"",
-            dash_count, close_brace, 16, b);
-    return make_gsl_err(gsl_FORMAT);
+    *total_size = c - rec;
+    return count == (size_t)(c - rec) && *c == end_marker;
 }
 
 static gsl_err_t
@@ -585,6 +573,42 @@ gsl_check_default(const char *rec,
     return make_gsl_err(gsl_OK);
 }
 
+static gsl_err_t
+gsl_parse_comment(gsl_task_spec_type in_field_type,
+                  const char *rec,
+                  size_t *total_size)
+{
+    const char *c;
+    const char closing_brace = in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']';
+
+    size_t dash_count = 0;
+    for (c = rec; *c == '-'; c++)
+        dash_count++;
+
+    size_t chunk_size;
+    gsl_err_t err;
+
+    for (; *c; c++) {
+        if (*c != '-') continue;
+
+        err.code = !gsl_check_floating_boundary('-', dash_count, closing_brace, c, &chunk_size);
+        if (err.code) {
+            c += chunk_size - 1;
+            continue;
+        }
+
+        // in_comment = false;
+        c += chunk_size;
+
+        *total_size = c - rec;
+        return make_gsl_err(gsl_OK);
+    }
+
+    gsl_log("-- no matching closing sequence -%zutimes %c found: \"%.*s\"",
+            dash_count, (in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']'), 16, rec);
+    return make_gsl_err(gsl_FORMAT);
+}
+
 gsl_err_t gsl_parse_task(const char *rec,
                          size_t *total_size,
                          struct gslTaskSpec *specs,
@@ -918,9 +942,9 @@ gsl_err_t gsl_parse_task(const char *rec,
             break;
         case '-':
             if (in_field && !in_tag && b == c) {
-                // Example: rec = "...{-name John Smith}}"
+                // Example: rec = "...{-name John Smith-}}"
                 //                     ^  -- ignore the commented out field
-                err = gsl_parse_comment(c, in_field_type, &chunk_size);
+                err = gsl_parse_comment(in_field_type, c, &chunk_size);
                 if (err.code) return err;
 
                 in_field = false;
@@ -1093,22 +1117,6 @@ gsl_parse_array(void *obj,
     return make_gsl_err(gsl_FORMAT);
 }
 
-static bool
-gsl_check_floating_boundary(char bound, size_t bound_size,
-                            const char *rec,
-                            size_t *total_size)
-{
-    assert(*rec == bound && bound_size != 0);
-
-    const char *c = rec;
-    do {
-        c++, bound_size--;
-    } while (bound_size != 0 && *c == bound);
-
-    *total_size = c - rec;
-    return bound_size == 0;
-}
-
 gsl_err_t
 gsl_parse_cdata(void *obj,
                 const char *rec,
@@ -1127,6 +1135,10 @@ gsl_parse_cdata(void *obj,
     gsl_err_t err;
 
     const char *b, *c, *e;
+
+    if (*rec != '"')
+        return make_gsl_err(gsl_FORMAT);
+
     for (c = rec; *c; c++) {
         switch (*c) {
         case '\n':
@@ -1141,15 +1153,12 @@ gsl_parse_cdata(void *obj,
                 break;
             }
 
-            err.code = !gsl_check_floating_boundary('"', num_quotes, c, &chunk_size);
+            err.code = !gsl_check_floating_boundary('"', num_quotes, '}', c, &chunk_size);
             if (err.code) {
                 // We found something interesting at |c + chunk_size|.  Skip |chunk_size - 1| elements.
                 c += chunk_size - 1;
                 break;
             }
-
-            err = gsl_check_matching_closing_brace(c + chunk_size, GSL_GET_STATE);
-            if (err.code) return err;
 
             err = gsl_check_field_terminal_value(b, e - b, spec);
             if (err.code) return err;
