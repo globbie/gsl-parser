@@ -659,7 +659,7 @@ gsl_err_t gsl_parse_task(const char *rec,
 
             if (b != c) {
                 // Example: rec = "{n!ame John Smith...
-                //                   ^  -- nothing interesting, go to default case
+                //                   ^  -- nothing interesting, go to the default case
                 goto default_case;
             }
 
@@ -1136,10 +1136,14 @@ gsl_parse_cdata(void *obj,
 
     const char *b, *c, *e;
 
-    if (*rec != '"')
+    c = rec;
+    while (*c && isspace(*c))
+        c++;
+
+    if (*c != '{' || *++c != '"')
         return make_gsl_err(gsl_FORMAT);
 
-    for (c = rec; *c; c++) {
+    for (; *c; c++) {
         switch (*c) {
         case '\n':
         case '\r':
@@ -1164,7 +1168,14 @@ gsl_parse_cdata(void *obj,
             if (err.code) return err;
 
             // in_cdata = false;
-            c += chunk_size;
+            //printf("c is %s;;  c + chunk_size is %s\n", c, c + chunk_size);
+            // TODO(k15tfu): Nice way to deal with it is to update .parse() implementations to
+            //               handle spaces before the actual data, and exit exactly right after that.
+            c += chunk_size + 1;  // Shamaning with spaces..
+
+            // TODO(k15tfu): remove this
+            while (*c && isspace(*c))
+                c++;
 
             *total_size = c - rec;
             return make_gsl_err(gsl_OK);

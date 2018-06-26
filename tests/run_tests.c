@@ -392,7 +392,7 @@ static struct gslTaskSpec gen_groups_item_spec(struct User *self, int flags) {
                                  .alloc = alloc_group_atomic, .append = append_group, .accu = self };
 }
 
-static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec* item_spec, int flags) {
+static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec *item_spec, int flags) {
     assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
     return (struct gslTaskSpec){ .type = GSL_SET_ARRAY_STATE,
                                  .name = "groups", .name_size = strlen("groups"),
@@ -407,6 +407,15 @@ static struct gslTaskSpec gen_skills_spec(struct User *self, int flags) {
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .validate = parse_skills, .obj = self };
 }
+
+static struct gslTaskSpec gen_cdata_spec(struct gslTaskSpec *inner_spec) {
+    assert(inner_spec->type == GSL_GET_STATE || inner_spec->type == GSL_SET_STATE);
+    return (struct gslTaskSpec){ .type = inner_spec->type,
+                                 .name = inner_spec->name, .name_size = inner_spec->name_size,
+                                 .is_selector = inner_spec->is_selector,
+                                 .parse = gsl_parse_cdata, .obj = inner_spec };
+}
+
 
 // --------------------------------------------------------------------------------
 // Common variables
@@ -2458,6 +2467,47 @@ START_TEST(parse_array_comment_unmatched_braces)
 END_TEST
 
 // --------------------------------------------------------------------------------
+// CDATA extension
+
+START_TEST(parse_cdata)
+    struct gslTaskSpec simple_name_spec = gen_name_spec(&user, SPEC_NAME);
+    struct gslTaskSpec complex_name_spec = gen_cdata_spec(&simple_name_spec);
+
+  {
+    DEFINE_TaskSpecs(parse_user_args, simple_name_spec);
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {name John Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "John Smith");
+    user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user {name J{}hn Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+  }
+
+  {
+    DEFINE_TaskSpecs(parse_user_args, complex_name_spec);
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user {name John Smith}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_FORMAT);
+
+    rc = gsl_parse_task(rec = "{user {name {\"J\"\"}hn Smith\"}}}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "J\"\"}hn Smith");
+    user.name_size = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args); simple_name_spec.is_completed = false;
+
+    rc = gsl_parse_task(rec = "{user {name {\"\"\"   J{}hn Smith   \"\"\"} }}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ASSERT_STR_EQ(user.name, user.name_size, "J{}hn Smith");
+  }
+END_TEST
+
+// --------------------------------------------------------------------------------
 // main
 
 // TODO(k15tfu): Rename SPEC_CHANGE to SPEC_SET_STATE
@@ -2560,6 +2610,12 @@ int main() {
     tcase_add_test(tc_array, parse_array_comment);
     tcase_add_test(tc_array, parse_array_comment_unmatched_braces);
     suite_add_tcase(s, tc_array);
+
+    // Extensions:
+    TCase* tc_cdata = tcase_create("cdata cases");
+    tcase_add_checked_fixture(tc_cdata, test_case_fixture_setup, NULL);
+    tcase_add_test(tc_cdata, parse_cdata);
+    suite_add_tcase(s, tc_cdata);
 
     SRunner* sr = srunner_create(s);
     //srunner_set_fork_status(sr, CK_NOFORK);
