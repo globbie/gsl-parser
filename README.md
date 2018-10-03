@@ -10,7 +10,7 @@ that graphs are not lists. GSL-notation allows its users to express not only the
 hierarchical grouping of objects but also the transactional operations within
 a database storage system.
 
-##Quick start with GSL
+## Quick start with GSL
 
 Curly braces are used to delimit a scope or an object.
 
@@ -20,8 +20,16 @@ Empty object:
 
 An area can be labeled with a tag that starts right after the opening brace
 and continues up to the first space character or any other reserved character.
-The end of trailing spaces
+String starting right after the trailing spaces is called a value of a default attribute.
 
 >{class Recipe}
+
+In the example code above *class* is a tag,
+and *Recipe* is a value of a default attribute.
+In this context it can be *_name*.
+
+Objects can be nested, naturally.
+
+> {class Secret Agent {instance James Bond }}
 
 
