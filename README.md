@@ -20,7 +20,7 @@ Empty object:
 
 An area can be labeled with a tag that starts right after the opening brace
 and continues up to the first space character or any other reserved character.
-String starting right after the trailing spaces is called a value of a default attribute.
+The character string starting right after the trailing spaces is a value of a *default attribute*.
 
 >{class Recipe}
 
