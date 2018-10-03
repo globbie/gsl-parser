@@ -1,2 +1,2 @@
 # gsl-parser
-Globbie Semantic Language Parser
+General Semantics Language Parser
