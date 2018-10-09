@@ -3,6 +3,7 @@
 #include <check.h>
 
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define USER_NAME_SIZE 64
@@ -2730,6 +2731,12 @@ int main() {
     SRunner* sr = srunner_create(s);
     //srunner_set_fork_status(sr, CK_NOFORK);
     srunner_run_all(sr, CK_NORMAL);
+    int number_failed = srunner_ntests_failed(sr);
     srunner_free(sr);
-    return 0;
+
+    if (number_failed != 0) {
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
 }

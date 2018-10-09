@@ -17,3 +17,5 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wno-pedantic)
 target_link_libraries(${PROJECT_NAME} ${CHECK_LIBRARY} gsl-parser_static)
+
+add_test(NAME mytest COMMAND ${PROJECT_NAME})
