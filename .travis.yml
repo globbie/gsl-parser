@@ -15,7 +15,6 @@ dist: trusty
 compiler:
 - gcc
 - clang
-
 git:
   submodules: false
 install:
@@ -25,3 +24,9 @@ before_script:
 - cd build
 - cmake ..
 script: make
+notifications:
+  slack:
+    matrix:
+    - globbie:0Z5JSiOzkQMRvBxsDoCM6X7G
+    rooms:
+      secure: YwRmQNFsfnbPPawXxbcoxhJLltFawBytewVWOw3/EeTWf0x3Lg69nXpZQG61STazhnxEMwjh1KdjPQPPZc6bIt+VOT6LkjqsnSXQGGZGDLRiGeD+huPNWLkGOkLpgVss/g8DW+FVNlX37J7xaEZw9irdILCTEmQu63mbqwyVBdYS6qTM3r3F0mM6hPYB74xw270tIYP3A6TvZ+9aodORgubvk6wTNgHjs8IHAPCFNKRVB0xGrNswnoMBtMdHOCVUnYyJgg8I53Yva/Q6n9PDX2SOvbsvOePXxemKXaE57ZVBDnEA8W/k8VjDvr2OUNXUcmnxngSMRvowb2qMH2CaFTDWkzNls3pyo7nDdTpbOzP4nazkJ0jzmv69OPRQCAMzHxRFciqdGTJOs5inh4G3qkB+Kb+McFq4nbX+ChfHmqf12HxZO2c7lOg2k6SPfx1KiLdbQ5kF7pB9ff1gpeGq0yHZR7g5W6Y6OqHNChp6I7EgmVxYigSHE9qQ0Zj/k6JL8NROS6ePKrMC9GNV1WUBIbzOI9FPsUu7M0vJoxjPxGicnaLI6/OjQx7zYITaKF5x1PIbDLSbUUtZwJbe38TM7DQ+ad5vSy0t3olqPrmalehLPkmGMQOAdBUokh7B3V9HK6thbc4NNStO8w8PTZfacqWEKgHkbzxt6ETfAZhj6wE=
