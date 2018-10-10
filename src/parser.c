@@ -19,7 +19,7 @@
 #define DEBUG_PARSER_LEVEL_2 0
 #define DEBUG_PARSER_LEVEL_3 0
 #define DEBUG_PARSER_LEVEL_4 0
-#define DEBUG_PARSER_LEVEL_TMP 1
+#define DEBUG_PARSER_LEVEL_TMP 0
 
 static bool
 gsl_check_floating_boundary(char repeatee, size_t count,
@@ -49,38 +49,43 @@ gsl_run_set_size_t(void *obj,
     assert(val && val_size != 0);
 
     if (!isdigit(val[0])) {
-        gsl_log("-- num size_t doesn't start from a digit: \"%.*s\"",
-                (int)val_size, val);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- num size_t doesn't start from a digit: \"%.*s\"",
+                    (int)val_size, val);
         return make_gsl_err(gsl_FORMAT);
     }
 
     errno = 0;
     num = strtoull(val, &num_end, GSL_NUM_ENCODE_BASE);  // FIXME(k15tfu): Null-terminated string is expected
     if (errno == ERANGE && num == ULLONG_MAX) {
-        gsl_log("-- num limit reached: %.*s max: %llu",
-                (int)val_size, val, ULLONG_MAX);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- num limit reached: %.*s max: %llu",
+                    (int)val_size, val, ULLONG_MAX);
         return make_gsl_err(gsl_LIMIT);
     }
     else if (errno != 0 && num == 0) {
-        gsl_log("-- cannot convert \"%.*s\" to num: %d",
-                (int)val_size, val, errno);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- cannot convert \"%.*s\" to num: %d",
+                    (int)val_size, val, errno);
         return make_gsl_err(gsl_FORMAT);
     }
 
     if (val + val_size != num_end) {
-        gsl_log("-- not all characters in \"%.*s\" were parsed: \"%.*s\"",
-                (int)val_size, val, (int)(num_end - val), val);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- not all characters in \"%.*s\" were parsed: \"%.*s\"",
+                    (int)val_size, val, (int)(num_end - val), val);
         return make_gsl_err(gsl_FORMAT);
     }
 
     if (ULLONG_MAX > SIZE_MAX && num > SIZE_MAX) {
-        gsl_log("-- num size_t limit reached: %llu max: %llu",
-                num, (unsigned long long)SIZE_MAX);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- num size_t limit reached: %llu max: %llu",
+                    num, (unsigned long long)SIZE_MAX);
         return make_gsl_err(gsl_LIMIT);
     }
 
     *self = (size_t)num;
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_3)
         gsl_log("++ got num size_t: %zu",
                 *self);
 
@@ -100,7 +105,7 @@ gsl_parse_size_t(void *obj,
     };
     gsl_err_t err;
 
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_4)
         gsl_log(".. parse num size_t: \"%.*s\"", 16, rec);
 
     err = gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
@@ -112,7 +117,7 @@ gsl_parse_size_t(void *obj,
 static int
 gsl_spec_is_correct(struct gslTaskSpec *spec)
 {
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_4)
         gsl_log(".. check spec: \"%.*s\"..", spec->name_size, spec->name);
 
     // Check the fields are not mutually exclusive (by groups):
@@ -275,23 +280,26 @@ static gsl_err_t
 gsl_spec_buf_copy(struct gslTaskSpec *spec,
                   const char *val, size_t val_size)
 {
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_4)
         gsl_log(".. writing val \"%.*s\" [%zu] to buf [max size: %zu]..",
                 val_size, val, val_size, spec->max_buf_size);
 
     if (!val_size) {
-        gsl_log("-- empty value :(");
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- empty value :(");
         return make_gsl_err(gsl_FORMAT);
     }
     if (val_size > spec->max_buf_size) {
-        gsl_log("-- %.*s: buf limit reached: %zu max: %zu",
-                spec->name_size, spec->name, val_size, spec->max_buf_size);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- %.*s: buf limit reached: %zu max: %zu",
+                    spec->name_size, spec->name, val_size, spec->max_buf_size);
         return make_gsl_err(gsl_LIMIT);
     }
 
     if (*spec->buf_size) {
-        gsl_log("-- %.*s: buf already contains \"%.*s\"",
-                spec->name_size, spec->name, spec->buf_size, spec->buf);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- %.*s: buf already contains \"%.*s\"",
+                    spec->name_size, spec->name, spec->buf_size, spec->buf);
         return make_gsl_err(gsl_EXISTS);
     }
 
@@ -362,8 +370,9 @@ gsl_check_matching_closing_brace(const char *c, gsl_task_spec_type in_field_type
         break;
     }
 
-    gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
-            (in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']'), 16, c);
+    if (DEBUG_PARSER_LEVEL_1)
+        gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
+                (in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']'), 16, c);
     return make_gsl_err(gsl_FORMAT);
 }
 
@@ -377,7 +386,7 @@ gsl_check_implied_field(const char *val, size_t val_size,
 
     assert(val_size && "implied val is empty");
 
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_3)
         gsl_log("++ got implied val: \"%.*s\" [%zu]",
                 val_size, val, val_size);
 
@@ -391,13 +400,14 @@ gsl_check_implied_field(const char *val, size_t val_size,
     }
 
     if (!implied_spec) {
-        gsl_log("-- no implied spec found to handle the \"%.*s\" val",
-                val_size, val);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- no implied spec found to handle the \"%.*s\" val",
+                    val_size, val);
 
         return make_gsl_err(gsl_NO_MATCH);
     }
 
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_3)
         gsl_log("++ got implied spec: \"%.*s\" buf: %p run: %p!",
                 implied_spec->name_size, implied_spec->name, implied_spec->buf, implied_spec->run);
 
@@ -411,8 +421,9 @@ gsl_check_implied_field(const char *val, size_t val_size,
 
     err = implied_spec->run(implied_spec->obj, val, val_size);
     if (err.code) {
-        gsl_log("-- implied func for \"%.*s\" failed: %d :(",
-                val_size, val, err);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- implied func for \"%.*s\" failed: %d :(",
+                    val_size, val, err);
         return err;
     }
 
@@ -431,22 +442,24 @@ gsl_check_field_tag(const char *name,
     gsl_err_t err;
 
     if (!name_size) {
-        gsl_log("-- empty field tag?");
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- empty field tag?");
         return make_gsl_err(gsl_FORMAT);
     }
 
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_3)
         gsl_log("++ BASIC LOOP got tag after brace: \"%.*s\" [%zu]",
                 name_size, name, name_size);
 
     err = gsl_find_spec(name, name_size, type, specs, num_specs, out_spec);
     if (err.code) {
-        gsl_log("-- no spec found to handle the \"%.*s\" tag: %d",
-                name_size, name, err);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- no spec found to handle the \"%.*s\" tag: %d",
+                    name_size, name, err);
         return err;
     }
 
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_3)
         gsl_log("++ got SPEC: \"%.*s\" (default: %d) (is validator: %d)",
                 (*out_spec)->name_size, (*out_spec)->name, (*out_spec)->is_default, (*out_spec)->is_validator);
 
@@ -480,7 +493,7 @@ gsl_parse_field_value(const char *name,
     }
 
     if (spec->parse) {
-        if (DEBUG_PARSER_LEVEL_2)
+        if (DEBUG_PARSER_LEVEL_4)
             gsl_log("\n    >>> further parsing required in \"%.*s\" FROM: \"%.*s\" FUNC: %p",
                     spec->name_size, spec->name, 16, rec, spec->parse);
 
@@ -496,7 +509,7 @@ gsl_parse_field_value(const char *name,
         return make_gsl_err(gsl_OK);
     }
 
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_4)
         gsl_log("== ATOMIC SPEC found: %.*s! no further parsing is required.",
                 spec->name_size, spec->name);
 
@@ -511,7 +524,7 @@ gsl_check_field_terminal_value(const char *val, size_t val_size,
 {
     gsl_err_t err;
 
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_3)
         gsl_log("++ got terminal val: \"%.*s\" [%zu]",
                 val_size, val, val_size);
 
@@ -527,8 +540,9 @@ gsl_check_field_terminal_value(const char *val, size_t val_size,
 
     err = spec->run(spec->obj, val, val_size);
     if (err.code) {
-        gsl_log("-- \"%.*s\" func run failed: %d :(",
-                spec->name_size, spec->name, err.code);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- \"%.*s\" func run failed: %d :(",
+                    spec->name_size, spec->name, err.code);
         return err;
     }
 
@@ -558,15 +572,17 @@ gsl_check_default(const char *rec,
     }
 
     if (!default_spec) {
-        gsl_log("-- no default spec found to handle an empty field (ignoring selectors): %.*s",
-                16, rec);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- no default spec found to handle an empty field (ignoring selectors): %.*s",
+                    16, rec);
         return make_gsl_err(gsl_NO_MATCH);
     }
 
     err = default_spec->run(default_spec->obj, NULL, 0);
     if (err.code) {
-        gsl_log("-- default func run failed: %d :(",
-                err.code);
+        if (DEBUG_PARSER_LEVEL_1)
+            gsl_log("-- default func run failed: %d :(",
+                    err.code);
         return err;
     }
 
@@ -604,8 +620,9 @@ gsl_parse_comment(gsl_task_spec_type in_field_type,
         return make_gsl_err(gsl_OK);
     }
 
-    gsl_log("-- no matching closing sequence -%zutimes %c found: \"%.*s\"",
-            dash_count, (in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']'), 16, rec);
+    if (DEBUG_PARSER_LEVEL_1)
+        gsl_log("-- no matching closing sequence -%zutimes %c found: \"%.*s\"",
+                dash_count, (in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']'), 16, rec);
     return make_gsl_err(gsl_FORMAT);
 }
 
@@ -631,7 +648,7 @@ gsl_err_t gsl_parse_task(const char *rec,
     b = NULL;
     e = NULL;
 
-    if (DEBUG_PARSER_LEVEL_2)
+    if (DEBUG_PARSER_LEVEL_4)
         gsl_log("\n\n*** start basic PARSING: \"%.*s\" num specs: %zu [%p]",
                 16, rec, num_specs, specs);
 
@@ -697,7 +714,7 @@ gsl_err_t gsl_parse_task(const char *rec,
                 break;
             }
 
-            if (DEBUG_PARSER_LEVEL_2)
+            if (DEBUG_PARSER_LEVEL_4)
                 gsl_log("+ whitespace in basic PARSING!");
 
             // Parse a tag after a first space.  Means in_tag can be set to true.
@@ -775,8 +792,9 @@ gsl_err_t gsl_parse_task(const char *rec,
                 //                            ^  -- terminal value cannot contain braces
                 //      or: rec = "{name John [Smith]}"
                 //                            ^  -- same way
-                gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '%c': %.*s",
-                        spec->name_size, spec->name, *c, c - b + 16, b);
+                if (DEBUG_PARSER_LEVEL_1)
+                    gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" has an opening brace '%c': %.*s",
+                            spec->name_size, spec->name, *c, c - b + 16, b);
                 *total_size = c - rec;
                 return make_gsl_err(gsl_FORMAT);
             }
@@ -800,8 +818,9 @@ gsl_err_t gsl_parse_task(const char *rec,
                 //                      ^  -- terminal value cannot start with an opening brace
                 // Example: rec = "{name[John Smith]}"
                 //                      ^  -- same way
-                gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '%c': %.*s",
-                        spec->name_size, spec->name, *c, c - b + 16, b);
+                if (DEBUG_PARSER_LEVEL_1)
+                    gsl_log("-- terminal val for ATOMIC SPEC \"%.*s\" starts with an opening brace '%c': %.*s",
+                            spec->name_size, spec->name, *c, c - b + 16, b);
                 *total_size = c - rec;  // chunk_size should be 0
                 return make_gsl_err(gsl_FORMAT);
             }
@@ -981,7 +1000,7 @@ default_case:
         c++;
     }
 
-    if (DEBUG_PARSER_LEVEL_1)
+    if (DEBUG_PARSER_LEVEL_4)
         gsl_log("\n\n--- end of basic PARSING: \"%s\" num specs: %zu [%p]",
                 rec, num_specs, specs);
 
@@ -1035,7 +1054,7 @@ gsl_parse_array(void *obj,
 
             assert(is_atomic);  // |is_item| is used only with atomic elements
 
-            if (DEBUG_PARSER_LEVEL_2)
+            if (DEBUG_PARSER_LEVEL_3)
                 gsl_log("  == got new item: \"%.*s\"",
                         (int)(e - b), b);
 
@@ -1062,15 +1081,17 @@ gsl_parse_array(void *obj,
 
             err = spec->alloc(spec->accu, NULL, 0, item_count, &item);
             if (err.code) {
-                gsl_log("-- item alloc failed: %d :(", err.code);
+                if (DEBUG_PARSER_LEVEL_1)
+                    gsl_log("-- item alloc failed: %d :(", err.code);
                 *total_size = c - rec;
                 return err;
             }
 
             err = spec->parse(item, c + 1, &chunk_size);
             if (err.code) {
-                gsl_log("-- ERR: %d parsing of spec \"%.*s\" failed :(",
-                        err.code, spec->name_size, spec->name);
+                if (DEBUG_PARSER_LEVEL_1)
+                    gsl_log("-- ERR: %d parsing of spec \"%.*s\" failed :(",
+                            err.code, spec->name_size, spec->name);
                 *total_size = c - rec;
                 return err;
             }
@@ -1095,7 +1116,7 @@ gsl_parse_array(void *obj,
 
                 assert(is_atomic);  // |is_item| is used only with atomic elements
 
-                if (DEBUG_PARSER_LEVEL_2)
+                if (DEBUG_PARSER_LEVEL_3)
                     gsl_log("  == got new item: \"%.*s\"",
                             (int)(e - b), b);
 
