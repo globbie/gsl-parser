@@ -21,6 +21,8 @@
 #define DEBUG_PARSER_LEVEL_4 0
 #define DEBUG_PARSER_LEVEL_TMP 0
 
+#define uninitialized_var(x) x = x
+
 static bool
 gsl_check_floating_boundary(char repeatee, size_t count,
                             char end_marker,
@@ -633,7 +635,7 @@ gsl_err_t gsl_parse_task(const char *rec,
 {
     const char *b, *c, *e;
 
-    struct gslTaskSpec *spec;
+    struct gslTaskSpec *uninitialized_var(spec);
 
     bool in_implied_field = false;
     bool in_field = false;
