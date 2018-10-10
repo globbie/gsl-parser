@@ -2,23 +2,22 @@ language: c
 addons:
   apt:
     sources:
-    - george-edison55-precies-backports
+    - llvm-toolchain-trusty-7
     - ubuntu-toolchain-r-test
     packages:
-    - cmake
-    - cmake-data
-    - gcc-4.8
-    - clang
     - check
-    - libsubunit-dev
-dist: trusty
+    - clang-7
+    - cmake
+    - gcc-7
+dist: xenial
 compiler:
 - gcc
 - clang
 git:
   submodules: false
 install:
-- if [ "$CC" = "gcc" ]; then export CC="gcc-4.8"; fi
+- if [ "$CC" = "gcc" ]; then export CC="gcc-7"; fi
+- if [ "$CC" = "clang" ]; then export CC="clang-7"; fi
 before_script:
 - mkdir build
 - cd build
