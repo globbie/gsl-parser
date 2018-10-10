@@ -13,6 +13,9 @@ dist: xenial
 compiler:
 - gcc
 - clang
+env:
+- BUILD_TYPE=Debug
+- BUILD_TYPE=Release
 git:
   submodules: false
 install:
@@ -21,7 +24,7 @@ install:
 before_script:
 - mkdir build
 - cd build
-- cmake ..
+- cmake -D CMAKE_BUILD_TYPE=$BUILD_TYPE ..
 script: make && ctest --output-on-failure .
 notifications:
   slack:
