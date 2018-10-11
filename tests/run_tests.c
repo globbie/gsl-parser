@@ -42,9 +42,8 @@ static void test_case_fixture_setup(void) {
 
 static gsl_err_t parse_user(void *obj, const char *rec, size_t *total_size) {
     struct TaskSpecs *args = (struct TaskSpecs *)obj;
-    ck_assert(args != NULL);
-    ck_assert(rec != NULL);
-    ck_assert(total_size);
+    ck_assert(args);
+    ck_assert(rec); ck_assert(total_size);
     return gsl_parse_task(rec, total_size, args->specs, args->num_specs);
 }
 
