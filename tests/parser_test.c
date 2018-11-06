@@ -374,7 +374,6 @@ static struct gslTaskSpec gen_contacts_spec(struct User *self, int flags) {
     assert((flags & (SPEC_SELECTOR | SPEC_CHANGE)) == flags &&
            "Valid flags: [SPEC_SELECTOR] [SPEC_CHANGE]");
     return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_STATE : GSL_SET_STATE,
-                                 .is_validator = true,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .validate = parse_contacts, .obj = self };
 }
@@ -404,7 +403,6 @@ static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec *item_spec, int fla
 static struct gslTaskSpec gen_skills_spec(struct User *self, int flags) {
     assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
     return (struct gslTaskSpec){ .type = GSL_SET_ARRAY_STATE,
-                                 .is_validator = true,
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .validate = parse_skills, .obj = self };
 }

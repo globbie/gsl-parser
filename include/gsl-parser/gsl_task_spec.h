@@ -17,7 +17,6 @@ struct gslTaskSpec {
     bool is_default;
     bool is_selector;
     bool is_implied;
-    bool is_validator;
     bool is_list_item;
 
     char *buf;
