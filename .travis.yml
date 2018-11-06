@@ -9,6 +9,7 @@ addons:
     - clang-7
     - cmake
     - gcc-7
+    - valgrind
 dist: xenial
 compiler:
 - gcc
