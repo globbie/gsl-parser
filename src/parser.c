@@ -144,11 +144,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     if (spec->buf)
         assert(*spec->buf_size == 0);
 
-    // TODO(k15tfu): ?? assert(spec->accu == NULL);  // TODO(k15tfu): ?? remove this field
-    if (spec->accu)
-        assert(spec->obj == NULL);
-    if (spec->obj)
-        assert(spec->accu == NULL);
+    // ?? assert(spec->obj == NULL);
 
     if (spec->buf)
         assert(spec->run == NULL && spec->parse == NULL && spec->validate == NULL);
@@ -158,8 +154,6 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
         assert(spec->buf == NULL && spec->run == NULL && spec->parse == NULL);
     if (spec->run)
         assert(spec->buf == NULL && spec->parse == NULL && spec->validate == NULL);
-
-    assert((spec->alloc != NULL) == (spec->append != NULL));
 
     // Check that they are not mutually exclusive (in general):
 
@@ -196,24 +190,24 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     if (spec->is_list_item) {
         assert(spec->type == 0);  // type is useless for list items
         assert(spec->name == NULL);
-        assert(spec->accu != NULL);
-        assert(spec->buf == NULL && spec->run == NULL && spec->validate == NULL);  // but |spec->parse| can be set
-        assert(spec->alloc != NULL);
+        assert(spec->obj != NULL);
+        assert(spec->buf == NULL);
+        assert(spec->validate == NULL);
+        assert(spec->run != NULL || spec->parse != NULL);
     }
 
-        //assert(spec->obj != NULL || spec->buf != NULL); // ??
+    assert(spec->obj != NULL || spec->buf != NULL);
 
     if (spec->buf) {
         // |spec->type| can be set (depends on |spec->name|)
         assert(!spec->is_default && !spec->is_list_item);
         assert(spec->name != NULL || spec->is_implied);
-        assert(spec->obj == NULL && spec->accu == NULL);
+        assert(spec->obj == NULL);
     }
 
     if (spec->run) {
         // |spec->type| can be set (depends on |spec->name|)
-        assert(!spec->is_list_item);
-        assert(spec->name != NULL || spec->is_default || spec->is_implied);
+        assert(spec->name != NULL || spec->is_default || spec->is_implied || spec->is_list_item);
         assert(spec->obj != NULL);
     }
 
@@ -221,7 +215,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
         // |spec->type| can be set
         assert(!spec->is_default && !spec->is_implied);
         assert(spec->name != NULL || spec->is_list_item);
-        assert(spec->obj != NULL || spec->is_list_item);
+        assert(spec->obj != NULL);
     }
 
     if (spec->validate) {
@@ -229,9 +223,6 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
         assert(spec->name == NULL);
         assert(spec->obj != NULL);
     }
-
-    // if (spec->alloc)  -- already handled in spec->is_list_item
-    assert((spec->alloc != NULL) == spec->is_list_item);
 
     // Test plans:
     //   buf:
@@ -268,7 +259,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     //       } - NOT TESTED!
     //       ) - NOT TESTED!
     assert(spec->name != NULL || spec->is_default || spec->is_implied || spec->is_list_item || spec->validate != NULL);
-    assert(spec->buf != NULL || spec->run != NULL || spec->parse != NULL || spec->validate != NULL || spec->alloc != NULL);
+    assert(spec->buf != NULL || spec->run != NULL || spec->parse != NULL || spec->validate != NULL);
 
     return 1;
 }
@@ -1014,11 +1005,10 @@ gsl_parse_array(void *obj,
 
     assert(spec->type == GSL_GET_STATE);
     assert(spec->name == NULL);
-    assert(spec->name == NULL && gsl_spec_is_correct(spec));
+    assert(spec->run != NULL || spec->parse != NULL);
+    assert(gsl_spec_is_correct(spec));
 
     const char *b, *c, *e;
-    void *item;
-    size_t item_count = 0;
 
     const bool is_atomic = spec->parse == NULL;
     bool in_item = false;
@@ -1055,14 +1045,10 @@ gsl_parse_array(void *obj,
                 gsl_log("  == got new item: \"%.*s\"",
                         (int)(e - b), b);
 
-            err = spec->alloc(spec->accu, b, e - b, item_count, &item);
-            if (err.code) return *total_size = c - rec, err;
-
-            err = spec->append(spec->accu, item);
+            err = spec->run(spec->obj, b, e - b);
             if (err.code) return *total_size = c - rec, err;
 
             in_item = false;
-            item_count++;
             b = c + 1;
             e = b;
             break;
@@ -1076,32 +1062,14 @@ gsl_parse_array(void *obj,
             // Example: rec = "{user...
             //                 ^  -- allocate an element
 
-            err = spec->alloc(spec->accu, NULL, 0, item_count, &item);
-            if (err.code) {
-                if (DEBUG_PARSER_LEVEL_1)
-                    gsl_log("-- item alloc failed: %d :(", err.code);
-                *total_size = c - rec;
-                return err;
-            }
-
-            err = spec->parse(item, c + 1, &chunk_size);
-            if (err.code) {
-                if (DEBUG_PARSER_LEVEL_1)
-                    gsl_log("-- ERR: %d parsing of spec \"%.*s\" failed :(",
-                            err.code, spec->name_size, spec->name);
-                *total_size = c - rec;
-                return err;
-            }
-
-            err = spec->append(spec->accu, item);
-            if (err.code) return *total_size = c - rec, err;
+            err = spec->parse(spec->obj, c + 1, &chunk_size);
+            if (err.code) return *total_size = c + chunk_size - rec, err;
 
             // Example: rec = "{user Sam}]
             //                 ^^^^^^^^^^  -- handled by an inner call to .parse()
             //                           ^  -- c + chunk_size
 
             // in_item == false
-            item_count++;
             c += chunk_size + 1;
             b = c;
             e = b;
@@ -1117,14 +1085,10 @@ gsl_parse_array(void *obj,
                     gsl_log("  == got new item: \"%.*s\"",
                             (int)(e - b), b);
 
-                err = spec->alloc(spec->accu, b, e - b, item_count, &item);
-                if (err.code) return *total_size = c - rec, err;
-
-                err = spec->append(spec->accu, item);
+                err = spec->run(spec->obj, b, e - b);
                 if (err.code) return *total_size = c - rec, err;
 
                 in_item = false;
-                item_count++;
                 // b = c + 1;
                 // e = b;
             }

@@ -180,12 +180,10 @@ static gsl_err_t run_set_anonymous_user(void *obj, const char *val, size_t val_s
     return make_gsl_err(gsl_OK);
 }
 
-static gsl_err_t alloc_group_atomic(void *obj, const char *gid, size_t gid_size,
-                                    size_t count, void **item) {
+static gsl_err_t run_groups_item(void *obj, const char *gid, size_t gid_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
     ck_assert(gid); ck_assert_uint_ne(gid_size, 0);
-    ck_assert_uint_eq(count, self->num_groups); ck_assert(item);
 
     if (self->num_groups == sizeof self->groups / sizeof self->groups[0])
         return make_gsl_err(gsl_LIMIT);  // TODO(k15tfu): ?? use gsl_NOMEM
@@ -196,64 +194,46 @@ static gsl_err_t alloc_group_atomic(void *obj, const char *gid, size_t gid_size,
     struct Group *group = &self->groups[self->num_groups++];
     memcpy(group->gid, gid, gid_size);
     group->gid_size = gid_size;
-    *item = group;
     return make_gsl_err(gsl_OK);
 }
 
-static gsl_err_t alloc_group_non_atomic(void *obj, const char *gid, size_t gid_size,
-                                        size_t count, void **item) {
-    struct User *self = (struct User *)obj;
-    ck_assert(self);
-    ck_assert(!gid); ck_assert_uint_eq(gid_size, 0);
-    ck_assert_uint_eq(count, self->num_groups); ck_assert(item);
-
-    if (self->num_groups == sizeof self->groups / sizeof self->groups[0])
-        return make_gsl_err(gsl_LIMIT);  // TODO(k15tfu): ?? use gsl_NOMEM
-
-    struct Group *group = &self->groups[self->num_groups++];
-    *item = group;
-    return make_gsl_err(gsl_OK);
-}
-
-static gsl_err_t append_group(void *accu __attribute__((unused)), void *item __attribute__((unused))) {
-    return make_gsl_err(gsl_OK);
-}
-
-static gsl_err_t run_set_default_group_non_atomic(void *obj, const char *val, size_t val_size) {
+static gsl_err_t run_set_default_group(void *obj, const char *val, size_t val_size) {
     struct Group *self = (struct Group *)obj;
     ck_assert(self);
     ck_assert(!val); ck_assert_uint_eq(val_size, 0);
     return make_gsl_err(gsl_FORMAT);  // error: gid is required
 }
 
-static gsl_err_t parse_group_non_atomic(void *obj, const char *rec, size_t *total_size) {
-    struct Group *self = (struct Group *)obj;
+static gsl_err_t parse_groups_item(void *obj, const char *rec, size_t *total_size) {
+    struct User *self = (struct User *)obj;
     ck_assert(self);
     ck_assert(rec); ck_assert(total_size);
+
+    if (self->num_groups == sizeof self->groups / sizeof self->groups[0])
+        return make_gsl_err(gsl_LIMIT);  // TODO(k15tfu): ?? use gsl_NOMEM
+
+    struct Group *group = &self->groups[self->num_groups++];
 
     struct gslTaskSpec specs[] = {
         {
           .is_implied = true,
-          .buf = self->gid,
-          .buf_size = &self->gid_size,
-          .max_buf_size = sizeof self->gid
+          .buf = group->gid,
+          .buf_size = &group->gid_size,
+          .max_buf_size = sizeof group->gid
         },
         {
           .is_default = true,
-          .run = run_set_default_group_non_atomic,
-          .obj = self
+          .run = run_set_default_group,
+          .obj = group
         }
     };
-
     return gsl_parse_task(rec, total_size, specs, sizeof specs / sizeof specs[0]);
 }
 
-static gsl_err_t alloc_language(void *obj, const char *lang, size_t lang_size,
-                                size_t count, void **item) {
+static gsl_err_t run_languages_item(void *obj, const char *lang, size_t lang_size) {
     struct User *self = (struct User *)obj;
     ck_assert(self);
     ck_assert(lang); ck_assert_uint_ne(lang_size, 0);
-    ck_assert_uint_eq(count, self->num_languages); ck_assert(item);
 
     if (self->num_languages == sizeof self->languages / sizeof self->languages[0])
         return make_gsl_err(gsl_LIMIT);  // TODO(k15tfu): ?? use gsl_NOMEM
@@ -264,11 +244,6 @@ static gsl_err_t alloc_language(void *obj, const char *lang, size_t lang_size,
     struct Language *language = &self->languages[self->num_languages++];
     memcpy(language->lang, lang, lang_size);
     language->lang_size = lang_size;
-    *item = language;
-    return make_gsl_err(gsl_OK);
-}
-
-static gsl_err_t append_language(void *accu __attribute__((unused)), void *item __attribute__((unused))) {
     return make_gsl_err(gsl_OK);
 }
 
@@ -286,9 +261,8 @@ static gsl_err_t parse_skills(void *obj,
 
         struct gslTaskSpec language_spec = {
             .is_list_item = true,
-            .alloc = alloc_language,
-            .append = append_language,
-            .accu = obj
+            .run = run_languages_item,
+            .obj = obj
         };
         return gsl_parse_array(&language_spec, rec, total_size);
     }
@@ -386,10 +360,9 @@ static struct gslTaskSpec gen_groups_item_spec(struct User *self, int flags) {
     assert((flags & SPEC_PARSE) == flags && "Valid flags: [SPEC_PARSE]");
     if (flags & SPEC_PARSE)
         return (struct gslTaskSpec){ .is_list_item = true,
-                                     .alloc = alloc_group_non_atomic, .append = append_group, .accu = self,
-                                     .parse = parse_group_non_atomic };
+                                     .parse = parse_groups_item, .obj = self };
     return (struct gslTaskSpec){ .is_list_item = true,
-                                 .alloc = alloc_group_atomic, .append = append_group, .accu = self };
+                                 .run = run_groups_item, .obj = self };
 }
 
 static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec *item_spec, int flags) {
