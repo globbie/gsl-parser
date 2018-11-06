@@ -153,11 +153,11 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
         assert(spec->accu == NULL);
 
     if (spec->buf)
-        assert(spec->parse == NULL && spec->validate == NULL && spec->run == NULL);
+        assert(spec->run == NULL && spec->parse == NULL && spec->validate == NULL);
     if (spec->parse)
-        assert(spec->buf == NULL && spec->validate == NULL && spec->run == NULL);
+        assert(spec->buf == NULL && spec->run == NULL && spec->validate == NULL);
     if (spec->validate)
-        assert(spec->buf == NULL && spec->parse == NULL && spec->run == NULL);
+        assert(spec->buf == NULL && spec->run == NULL && spec->parse == NULL);
     if (spec->run)
         assert(spec->buf == NULL && spec->parse == NULL && spec->validate == NULL);
 
@@ -205,7 +205,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
         assert(spec->type == 0);  // type is useless for list items
         assert(spec->name == NULL);
         assert(spec->accu != NULL);
-        assert(spec->buf == NULL && spec->validate == NULL && spec->run == NULL);  // but |spec->parse| can be set
+        assert(spec->buf == NULL && spec->run == NULL && spec->validate == NULL);  // but |spec->parse| can be set
         assert(spec->alloc != NULL);
     }
 
@@ -218,6 +218,13 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
         assert(spec->obj == NULL && spec->accu == NULL);
     }
 
+    if (spec->run) {
+        // |spec->type| can be set (depends on |spec->name|)
+        assert(!spec->is_validator && !spec->is_list_item);
+        assert(spec->name != NULL || spec->is_default || spec->is_implied);
+        assert(spec->obj != NULL);
+    }
+
     if (spec->parse) {
         // |spec->type| can be set
         assert(!spec->is_default && !spec->is_implied && !spec->is_validator);
@@ -227,13 +234,6 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     // if (spec->validate)  -- already handled in spec->is_validator
     assert((spec->validate != NULL) == spec->is_validator);
-
-    if (spec->run) {
-        // |spec->type| can be set (depends on |spec->name|)
-        assert(!spec->is_validator && !spec->is_list_item);
-        assert(spec->name != NULL || spec->is_default || spec->is_implied);
-        assert(spec->obj != NULL);
-    }
 
     // if (spec->alloc)  -- already handled in spec->is_list_item
     assert((spec->alloc != NULL) == spec->is_list_item);
@@ -273,7 +273,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     //       } - NOT TESTED!
     //       ) - NOT TESTED!
     assert(spec->name != NULL || spec->is_default || spec->is_implied || spec->is_validator || spec->is_list_item);
-    assert(spec->buf != NULL || spec->parse != NULL || spec->validate != NULL || spec->run != NULL || spec->alloc != NULL);
+    assert(spec->buf != NULL || spec->run != NULL || spec->parse != NULL || spec->validate != NULL || spec->alloc != NULL);
 
     return 1;
 }
