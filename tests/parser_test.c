@@ -366,8 +366,9 @@ static struct gslTaskSpec gen_groups_item_spec(struct User *self, int flags) {
 }
 
 static struct gslTaskSpec gen_groups_spec(struct gslTaskSpec *item_spec, int flags) {
-    assert((flags & SPEC_SELECTOR) == flags && "Valid flags: [SPEC_SELECTOR]");
-    return (struct gslTaskSpec){ .type = GSL_SET_ARRAY_STATE,
+    assert((flags & (SPEC_SELECTOR | SPEC_CHANGE)) == flags &&
+           "Valid flags: [SPEC_SELECTOR] [SPEC_CHANGE]");
+    return (struct gslTaskSpec){ .type = !(flags & SPEC_CHANGE) ? GSL_GET_ARRAY_STATE : GSL_SET_ARRAY_STATE,
                                  .name = "groups", .name_size = strlen("groups"),
                                  .is_selector = (flags & SPEC_SELECTOR),
                                  .parse = gsl_parse_array, .obj = item_spec };
@@ -2161,7 +2162,7 @@ END_TEST
 
 START_TEST(parse_array_tag_empty)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [! ]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2180,7 +2181,7 @@ END_TEST
 START_TEST(parse_array_tag)
   {
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups jsmith]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2192,7 +2193,7 @@ START_TEST(parse_array_tag)
 
   {
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, SPEC_PARSE);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups{jsmith}]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2204,7 +2205,7 @@ START_TEST(parse_array_tag)
 
   {
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2216,7 +2217,7 @@ END_TEST
 
 START_TEST(parse_array_value_empty)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user[!groups]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2233,7 +2234,7 @@ END_TEST
 
 START_TEST(parse_array_value_empty_with_spaces)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups   ]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2252,7 +2253,7 @@ START_TEST(parse_array_value_selector)
     // Case #1: atomic & non-atomic values
   {
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_SELECTOR), gen_default_spec(&user));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_SELECTOR | SPEC_CHANGE), gen_default_spec(&user));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups jsmith]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2278,7 +2279,7 @@ END_TEST
 
 START_TEST(parse_array_value_unmatched_type)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user {groups}}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2292,7 +2293,7 @@ END_TEST
 
 START_TEST(parse_array_value_unmatched_braces)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups}}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2306,7 +2307,7 @@ END_TEST
 
 START_TEST(parse_array_value_absent_braces)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2321,7 +2322,7 @@ END_TEST
 
 START_TEST(parse_array_value_atomic)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups jsmith]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2344,7 +2345,7 @@ END_TEST
 
 START_TEST(parse_array_value_atomic_with_spaces)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups   jsmith]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2373,7 +2374,7 @@ END_TEST
 
 START_TEST(parse_array_value_non_atomic)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, SPEC_PARSE);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups{jsmith}]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2402,7 +2403,7 @@ END_TEST
 
 START_TEST(parse_array_value_non_atomic_with_spaces)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, SPEC_PARSE);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [!groups   {jsmith}]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2472,7 +2473,7 @@ END_TEST
 
 START_TEST(parse_array_comment_empty)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user[-!-][!groups jsmith]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2507,7 +2508,7 @@ END_TEST
 
 START_TEST(parse_array_comment)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [-!groups jdoe-][!groups jsmith]}", &total_size, specs, sizeof specs / sizeof specs[0]);
@@ -2536,13 +2537,65 @@ END_TEST
 
 START_TEST(parse_array_comment_unmatched_braces)
     struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
-    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0), gen_default_spec(&user));
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, SPEC_CHANGE), gen_default_spec(&user));
     struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
 
     rc = gsl_parse_task(rec = "{user [-!groups jdoe]--]}-]}", &total_size, specs, sizeof specs / sizeof specs[0]);
     ck_assert_int_eq(rc.code, gsl_OK);
     ck_assert_uint_eq(total_size, strlen(rec));
     ASSERT_STR_EQ(user.name, user.name_size, "(none)");
+END_TEST
+
+START_TEST(parse_get_array_value_atomic)
+    struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, 0);
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user [groups jsmith]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 1); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith");
+    user.groups[0].gid_size = 0; user.num_groups = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user [groups jsmith audio]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 2); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith"); ASSERT_STR_EQ(user.groups[1].gid, user.groups[1].gid_size, "audio");
+    user.groups[0].gid_size = 0; user.num_groups = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user [groups jsmith audio sudo]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 3); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith"); ASSERT_STR_EQ(user.groups[1].gid, user.groups[1].gid_size, "audio"); ASSERT_STR_EQ(user.groups[2].gid, user.groups[2].gid_size, "sudo");
+END_TEST
+
+START_TEST(parse_get_array_value_non_atomic)
+    struct gslTaskSpec groups_item_spec = gen_groups_item_spec(&user, SPEC_PARSE);
+    DEFINE_TaskSpecs(parse_user_args, gen_groups_spec(&groups_item_spec, 0));
+    struct gslTaskSpec specs[] = { gen_user_spec(&parse_user_args, 0) };
+
+    rc = gsl_parse_task(rec = "{user [groups{jsmith}]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 1); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith");
+    user.groups[0].gid_size = 0; user.num_groups = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user [groups {jsmith}{audio}]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 2); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith"); ASSERT_STR_EQ(user.groups[1].gid, user.groups[1].gid_size, "audio");
+    user.groups[0].gid_size = 0; user.groups[1].gid_size = 0; user.num_groups = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user [groups {jsmith} {audio}{sudo}]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 3); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith"); ASSERT_STR_EQ(user.groups[1].gid, user.groups[1].gid_size, "audio"); ASSERT_STR_EQ(user.groups[2].gid, user.groups[2].gid_size, "sudo");
+    user.groups[0].gid_size = 0; user.groups[1].gid_size = 0; user.groups[2].gid_size = 0; user.num_groups = 0; RESET_IS_COMPLETED_gslTaskSpec(specs); RESET_IS_COMPLETED_TaskSpecs(&parse_user_args);
+
+    rc = gsl_parse_task(rec = "{user [groups {jsmith} {audio} {sudo}]}", &total_size, specs, sizeof specs / sizeof specs[0]);
+    ck_assert_int_eq(rc.code, gsl_OK);
+    ck_assert_uint_eq(total_size, strlen(rec));
+    ck_assert_uint_eq(user.num_groups, 3); ASSERT_STR_EQ(user.groups[0].gid, user.groups[0].gid_size, "jsmith"); ASSERT_STR_EQ(user.groups[1].gid, user.groups[1].gid_size, "audio"); ASSERT_STR_EQ(user.groups[2].gid, user.groups[2].gid_size, "sudo");
 END_TEST
 
 // --------------------------------------------------------------------------------
@@ -2671,6 +2724,7 @@ int main() {
     tcase_add_test(tc_change, parse_change_comment_unmatched_braces);
     suite_add_tcase(s, tc_change);
 
+    // FIXME(k15tfu): Mostly rename to parse_change_array*
     TCase* tc_array = tcase_create("array cases");
     tcase_add_checked_fixture(tc_array, test_case_fixture_setup, NULL);
     tcase_add_test(tc_array, parse_array_tag_empty);
@@ -2691,6 +2745,9 @@ int main() {
     tcase_add_test(tc_array, parse_array_comment_empty);
     tcase_add_test(tc_array, parse_array_comment);
     tcase_add_test(tc_array, parse_array_comment_unmatched_braces);
+    // FIXME(k15tfu): Add more get array test cases
+    tcase_add_test(tc_array, parse_get_array_value_atomic);
+    tcase_add_test(tc_array, parse_get_array_value_non_atomic);
     suite_add_tcase(s, tc_array);
 
     // Extensions:
