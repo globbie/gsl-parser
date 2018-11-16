@@ -124,7 +124,8 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
 
     // Check the fields are not mutually exclusive (by groups):
 
-    assert(spec->type == GSL_GET_STATE || spec->type == GSL_SET_STATE || spec->type == GSL_SET_ARRAY_STATE);
+    assert(spec->type == GSL_GET_STATE || spec->type == GSL_GET_ARRAY_STATE ||
+           spec->type == GSL_SET_STATE || spec->type == GSL_SET_ARRAY_STATE);
 
     assert((spec->name != NULL) == (spec->name_size != 0));
 
@@ -160,7 +161,7 @@ gsl_spec_is_correct(struct gslTaskSpec *spec)
     if (spec->type == GSL_SET_STATE) {
         assert(!spec->is_default && (!spec->is_implied || spec->name != NULL) && !spec->is_list_item);
         // ?? assert(spec->name != NULL);
-    } else if (spec->type == GSL_SET_ARRAY_STATE) {
+    } else if (spec->type == GSL_GET_ARRAY_STATE || spec->type == GSL_SET_ARRAY_STATE) {
         assert(!spec->is_default && !spec->is_implied && !spec->is_list_item);
         assert(spec->name != NULL || spec->validate != NULL);  // FIXME(k15tfu)
         assert(spec->obj != NULL);
@@ -328,7 +329,8 @@ gsl_find_spec(const char *name,
     if (DEBUG_PARSER_LEVEL_2)
         gsl_log("-- no named spec found for \"%.*s\" of type %s  validator: %p",
                 name_size, name,
-                spec_type == GSL_GET_STATE ? "GET" : spec_type == GSL_SET_STATE ? "SET" : "SET_ARRAY",
+                spec_type == GSL_GET_STATE ? "GET" : spec_type == GSL_GET_ARRAY_STATE ?
+                    "GET_ARRAY" : spec_type == GSL_SET_STATE ? "SET" : "SET_ARRAY",
                 validator_spec);
 
     if (validator_spec) {
@@ -1003,7 +1005,7 @@ gsl_parse_array(void *obj,
 {
     struct gslTaskSpec *spec = (struct gslTaskSpec *)obj;
 
-    assert(spec->type == GSL_GET_STATE);
+    assert(spec->type == 0);  // type is useless for list items
     assert(spec->name == NULL);
     assert(spec->run != NULL || spec->parse != NULL);
     assert(gsl_spec_is_correct(spec));

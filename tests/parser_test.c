@@ -2593,6 +2593,7 @@ END_TEST
 
 // TODO(k15tfu): Rename SPEC_CHANGE to SPEC_SET_STATE
 // TODO(k15tfu): Rename parse_change_* to parse_set_*
+// TODO(k15tfu): Add test cases for GSL_GET_ARRAY_STATE
 
 int main() {
     Suite* s = suite_create("suite");
