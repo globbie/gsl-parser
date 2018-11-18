@@ -40,7 +40,7 @@ gsl_check_floating_boundary(char repeatee, size_t count,
     return count == (size_t)(c - rec) && *c == end_marker;
 }
 
-static gsl_err_t
+gsl_err_t
 gsl_run_set_size_t(void *obj,
                    const char *val, size_t val_size)
 {
