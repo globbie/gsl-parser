@@ -338,7 +338,7 @@ gsl_find_spec(const char *name,
         return make_gsl_err(gsl_OK);
     }
 
-    return make_gsl_err(gsl_NO_MATCH);
+    return make_gsl_desc_err(gsl_NO_MATCH, name, name_size);
 }
 
 static gsl_err_t
@@ -360,7 +360,7 @@ gsl_check_matching_closing_brace(const char *c, gsl_task_spec_type in_field_type
         break;
     }
 
-    if (DEBUG_PARSER_LEVEL_1)
+    if (DEBUG_PARSER_LEVEL_TMP)
         gsl_log("-- no matching closing brace '%c' found: \"%.*s\"",
                 (in_field_type == GSL_GET_STATE || in_field_type == GSL_SET_STATE ? '}' : ']'), 16, c);
     return make_gsl_err(gsl_FORMAT);
@@ -638,7 +638,7 @@ gsl_err_t gsl_parse_task(const char *rec,
     b = NULL;
     e = NULL;
 
-    if (DEBUG_PARSER_LEVEL_4)
+    if (DEBUG_PARSER_LEVEL_TMP)
         gsl_log("\n\n*** start basic PARSING: \"%.*s\" num specs: %zu [%p]",
                 16, rec, num_specs, specs);
 
@@ -990,7 +990,7 @@ default_case:
         c++;
     }
 
-    if (DEBUG_PARSER_LEVEL_4)
+    if (DEBUG_PARSER_LEVEL_TMP)
         gsl_log("\n\n--- end of basic PARSING: \"%s\" num specs: %zu [%p]",
                 rec, num_specs, specs);
 

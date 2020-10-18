@@ -9,9 +9,12 @@ typedef enum { gsl_OK, gsl_FAIL, gsl_LIMIT, gsl_NO_MATCH, gsl_FORMAT,
 
 typedef struct {
     int code;
+    const char *val;
+    int val_size;
 } gsl_err_t;
 
 static inline gsl_err_t make_gsl_err(gsl_err_codes_t code) { return (gsl_err_t){ .code = code }; }
+static inline gsl_err_t make_gsl_desc_err(gsl_err_codes_t code, const char *val, int val_size) { return (gsl_err_t){ .code = code, .val = val, .val_size = val_size }; }
 
 static inline gsl_err_t make_gsl_err_external(int ext_code) {
     return (gsl_err_t){ .code = gsl_EXTERNAL | ext_code };
