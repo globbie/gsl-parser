@@ -1140,6 +1140,8 @@ gsl_parse_cdata(void *obj,
         return make_gsl_err(gsl_FORMAT);
     }
 
+    e = b = c;
+
     for (; *c; c++) {
         switch (*c) {
         case '\n':
